@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="644" viewBox="0 0 1120 644" role="img" aria-labelledby="title desc" lang="zh-CN">
+<title id="title">同一场会话，两条执行路径。</title>
+<desc id="desc">单次案例观测，不代表普遍性能；已回答不等于任务正确性已验证。</desc>
+<g font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Arial, Noto Sans CJK SC, Microsoft YaHei, sans-serif">
+<rect x="0.5" y="0.5" width="1119.00" height="643" fill="#faf9f6" stroke="#e3dfd3"/>
+<text x="36" y="38" font-size="15" font-weight="600" fill="#c96442">成对运行 / FASTAPI / 六轮对话</text>
+<text x="36" y="84" font-size="34" font-weight="600" fill="#141413">同一场会话，两条执行路径。</text>
+<text x="36" y="116" font-size="17" font-weight="400" fill="#6e6b64">已公开运行证据中的观测结果 · 2026 年 9 月 22 日</text>
+<rect x="36" y="146" width="336.00" height="228" fill="#faf9f6" stroke="#e3dfd3"/>
+<text x="56" y="179" font-size="18" font-weight="400" fill="#6e6b64">总耗时</text>
+<text x="56" y="222" font-size="34" font-weight="600" fill="#141413">103.5s</text>
+<text x="56" y="252" font-size="18" font-weight="600" fill="#c96442">降低 50%</text>
+<text x="56" y="282" font-size="15" font-weight="400" fill="#6e6b64">JevLoop</text>
+<text x="202" y="282" font-size="16" font-weight="400" fill="#141413">103.5s</text>
+<rect x="56" y="291" width="296.00" height="7" fill="#f0eee5"/>
+<rect x="56" y="291" width="148.25" height="7" fill="#c96442"/>
+<text x="56" y="329" font-size="15" font-weight="400" fill="#6e6b64">纯 LLM</text>
+<text x="202" y="329" font-size="16" font-weight="400" fill="#141413">206.7s</text>
+<rect x="56" y="338" width="296.00" height="7" fill="#f0eee5"/>
+<rect x="56" y="338" width="296.00" height="7" fill="#6e6b64"/>
+<rect x="392" y="146" width="336.00" height="228" fill="#faf9f6" stroke="#e3dfd3"/>
+<text x="412" y="179" font-size="18" font-weight="400" fill="#6e6b64">预估总成本</text>
+<text x="412" y="222" font-size="34" font-weight="600" fill="#141413">$0.040872</text>
+<text x="412" y="252" font-size="18" font-weight="600" fill="#c96442">降低 69%</text>
+<text x="412" y="282" font-size="15" font-weight="400" fill="#6e6b64">JevLoop</text>
+<text x="558" y="282" font-size="16" font-weight="400" fill="#141413">$0.040872</text>
+<rect x="412" y="291" width="296.00" height="7" fill="#f0eee5"/>
+<rect x="412" y="291" width="91.28" height="7" fill="#c96442"/>
+<text x="412" y="329" font-size="15" font-weight="400" fill="#6e6b64">纯 LLM</text>
+<text x="558" y="329" font-size="16" font-weight="400" fill="#141413">$0.132537</text>
+<rect x="412" y="338" width="296.00" height="7" fill="#f0eee5"/>
+<rect x="412" y="338" width="296.00" height="7" fill="#6e6b64"/>
+<rect x="748" y="146" width="336.00" height="228" fill="#faf9f6" stroke="#e3dfd3"/>
+<text x="768" y="179" font-size="18" font-weight="400" fill="#6e6b64">LLM 调用次数</text>
+<text x="768" y="222" font-size="34" font-weight="600" fill="#141413">20</text>
+<text x="768" y="252" font-size="18" font-weight="600" fill="#c96442">降低 62%</text>
+<text x="768" y="282" font-size="15" font-weight="400" fill="#6e6b64">JevLoop</text>
+<text x="914" y="282" font-size="16" font-weight="400" fill="#141413">20</text>
+<rect x="768" y="291" width="296.00" height="7" fill="#f0eee5"/>
+<rect x="768" y="291" width="113.85" height="7" fill="#c96442"/>
+<text x="768" y="329" font-size="15" font-weight="400" fill="#6e6b64">纯 LLM</text>
+<text x="914" y="329" font-size="16" font-weight="400" fill="#141413">52</text>
+<rect x="768" y="338" width="296.00" height="7" fill="#f0eee5"/>
+<rect x="768" y="338" width="296.00" height="7" fill="#6e6b64"/>
+<text x="36" y="414" font-size="15" font-weight="600" fill="#6e6b64">LOOP 内部实际发生了什么</text>
+<text x="36" y="450" font-size="18" font-weight="400" fill="#6e6b64">模型调用</text>
+<text x="36" y="486" font-size="28" font-weight="600" fill="#141413">22 Jev + 20 LLM</text>
+<text x="36" y="515" font-size="16" font-weight="400" fill="#6e6b64">对照组：52 次纯 LLM 调用</text>
+<text x="392" y="450" font-size="18" font-weight="400" fill="#6e6b64">Jev 直通步骤</text>
+<text x="392" y="486" font-size="28" font-weight="600" fill="#141413">2 / 22</text>
+<text x="392" y="515" font-size="16" font-weight="400" fill="#6e6b64">无需调用 LLM 的 Jev 决策</text>
+<text x="748" y="450" font-size="18" font-weight="400" fill="#6e6b64">LLM 复核</text>
+<text x="748" y="486" font-size="28" font-weight="600" fill="#141413">12</text>
+<text x="748" y="515" font-size="16" font-weight="400" fill="#6e6b64">3 次维持 · 9 次改判</text>
+<rect x="36" y="540" width="1048.00" height="1" fill="#e3dfd3"/>
+<text x="36" y="570" font-size="18" font-weight="600" fill="#141413">两条路径均已回答 6/6 轮</text>
+<text x="36" y="598" font-size="16" font-weight="400" fill="#6e6b64">单次案例观测，不代表普遍性能；已回答不等于任务正确性已验证。</text>
+<text x="36" y="625" font-size="14" font-weight="400" fill="#6e6b64">数据来源：公开脱敏 summary.json · 由数据生成的静态 SVG，非截图</text>
+</g>
+</svg>
