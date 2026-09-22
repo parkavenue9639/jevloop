@@ -364,7 +364,7 @@ def test_file_activity_is_derived_from_current_turn_history():
 
     questions, compiled = compile_questions(ws, SandboxTools())
     read_head = compiled.target_heads[("INSPECT", "READ_FILE")]
-    assert "already read this turn" in questions[read_head]["criteria"]["a.md"]["file"]
+    assert "read this turn; coverage may be partial or evicted" in questions[read_head]["criteria"]["a.md"]["file"]
     ws.append_history({
         "operation": "WRITE_FILE", "target": "a.md",
         "status": "ready", "disposition": "SUCCEEDED",

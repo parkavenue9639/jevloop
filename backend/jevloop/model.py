@@ -125,9 +125,8 @@ def _spec_phases(spec):
     return ("INSPECT",)
 
 def _criterion_description(description):
-    """Keep branch-local labels compact; provider prompts retain full guidance."""
-    first_sentence = description.split(". ", 1)[0].strip()
-    return first_sentence + ("." if not first_sentence.endswith(".") else "")
+    """Preserve code-owned tool boundaries; invocation budgets bound the prompt."""
+    return description.strip()
 
 
 def _target_criteria(workspace, spec):
@@ -150,8 +149,8 @@ def _target_criteria(workspace, spec):
             label += " [changed since last read; fresh read preferred]"
         elif key in read_current:
             label += (
-                " [already read this turn; evidence is in current_turn_notes; "
-                "do not select again unless a later mutation changed it]"
+                " [read this turn; coverage may be partial or evicted; "
+                "check available range and freshness before reusing evidence]"
             )
         if key not in {LLM_PARAMETERS, "DEFAULT_ARGUMENTS"}:
             criteria[key] = {vocab: label[:300], "arguments": json.dumps(
@@ -186,7 +185,9 @@ def compile_questions(workspace, provider):
             criteria = {LLM_PARAMETERS: {
                 "binding": "Let the LLM fill all parameters for this operation from context."}}
             if arguments_complete(spec, spec.binding_defaults or {}):
-                criteria["DEFAULT_ARGUMENTS"] = {"binding": "Use the tool's declared safe default arguments."}
+                criteria["DEFAULT_ARGUMENTS"] = {
+                    "binding": "Use the tool's declared safe default arguments.",
+                    "arguments": json.dumps(spec.binding_defaults or {}, ensure_ascii=False, sort_keys=True)}
             targets[spec.name] = criteria
         feasible_specs.append(spec)
     spec_by_name = {spec.name: spec for spec in feasible_specs}
@@ -268,9 +269,9 @@ def compile_questions(workspace, provider):
                 questions[mode_head] = {
                     "type": "choice",
                     "criteria": {
-                        "one": "Read one target only.",
+                        "one": "Use the single binding selected by the target question, including LLM_PARAMETERS.",
                         "many": (
-                            f"Read 2 to {spec.multi_target_max} independent "
+                            f"Use 2 to {spec.multi_target_max} compatible independent "
                             "targets in one bounded call."
                         ),
                     },
@@ -292,9 +293,10 @@ def compile_questions(workspace, provider):
                         },
                         "instructions": [
                             (
-                                "Assume multi-target reading was selected. Include "
+                                "Assume a multi-target call was selected. Include "
                                 "this target only when it is independently needed now; "
-                                "use state.file_activity to avoid unchanged rereads."
+                                "check available evidence coverage and freshness "
+                                "to avoid redundant observations, not necessary new ranges."
                             )
                         ],
                     }
