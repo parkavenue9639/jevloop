@@ -39,12 +39,12 @@ JevLoop 是独立的开源项目，由 Jev 提供能力，但不是 TypeSafe 官
 完成回答，纯 LLM Agent 用 **64.1 秒、14 步**。两条路径接收相同请求与执行配置，
 工作区和对话账本相互隔离。
 
-<img src="docs/assets/agent-loop-paired-run.png" alt="同一问题的双线执行：左侧 JevLoop 26.4 秒、5 步；右侧纯 LLM Agent 64.1 秒、14 步。展示全部步骤，包括 JevLoop 一次被拦截的尝试。" width="100%" />
+<img src="docs/assets/agent-loop-paired-zh-CN.svg" alt="同一问题的双线执行：左侧 JevLoop 26.4 秒、5 步；右侧纯 LLM Agent 64.1 秒、14 步。展示全部步骤，包括 JevLoop 一次被拦截的尝试。" width="100%" />
 
-截图使用真实前端步骤卡片制作紧凑历史回放，收起长命令与回答正文，没有省略步骤。
+原生矢量图由已公开的历史执行记录生成，复用前端配色，没有省略步骤，并非原始截图。
 本轮 JevLoop 的 5 步均使用了 LLM 辅助，步骤更少不代表完全不调用 LLM。
 这是选取的一轮观测，不代表普遍性能或正确性结论。
-[运行证据与截图说明 →](docs/assets/README.md)
+[运行证据与渲染说明 →](docs/assets/README.md)
 
 ## 一条经过实测的快速路径
 

@@ -43,13 +43,13 @@ its answer in **26.4s / 5 steps**, versus **64.1s / 14 steps** for the LLM-only
 agent. Both lanes received the same request and execution profile, with separate
 workspaces and transcripts.
 
-<img src="docs/assets/agent-loop-paired-run.png" alt="Same request, side-by-side execution: JevLoop finishes after 5 steps in 26.4 seconds; the LLM-only agent takes 14 steps and 64.1 seconds. All steps, including one denied JevLoop attempt, are shown." width="100%" />
+<img src="docs/assets/agent-loop-paired-en.svg" alt="Same request, side-by-side execution: JevLoop finishes after 5 steps in 26.4 seconds; the LLM-only agent takes 14 steps and 64.1 seconds. All steps, including one denied JevLoop attempt, are shown." width="100%" />
 
-Compact historical replay using the actual frontend step cards; long command
-and answer bodies are hidden. No steps are omitted. All five JevLoop steps used
+Native vector visualization generated from the published historical trace,
+using the frontend palette. No steps are omitted. All five JevLoop steps used
 LLM assistance; fewer steps here does not mean LLM-free execution. This is one
 selected turn, not a general performance or correctness claim.
-[Run evidence and capture notes →](docs/assets/README.md)
+[Run evidence and rendering notes →](docs/assets/README.md)
 
 ## A measured fast path
 
