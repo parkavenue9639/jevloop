@@ -421,12 +421,13 @@ def test_baseline_and_main_share_system_and_schemas():
     assert "content" in write["function"]["parameters"]["properties"]
     read = next(s for s in schemas if s["function"]["name"] == "READ_FILE")
     parameters = read["function"]["parameters"]
-    assert parameters["properties"]["targets"]["maxItems"] == 4
-    assert parameters["properties"]["targets"]["uniqueItems"] is True
-    assert parameters["oneOf"] == [
-        {"required": ["target"]},
-        {"required": ["targets"]},
-    ]
+    # Canonical path supports direct/open paths and a bounded coherent batch.
+    path_options = parameters["properties"]["path"]["oneOf"]
+    assert path_options[0]["type"] == "string"
+    assert path_options[1]["maxItems"] == 4
+    assert path_options[1]["uniqueItems"] is True
+    assert "path" in parameters["required"]
+    assert {"offset", "limit"} <= set(parameters["properties"])
     assert system_prompt(provider).startswith("You are an agent")
 
 

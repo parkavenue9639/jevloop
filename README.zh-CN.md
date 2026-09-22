@@ -87,6 +87,13 @@ argmax 不一致时，执行前直接拒绝。
 LLM 读取完整 `Transcript`；Jev 读取有界的 `Workspace` 投影，其中包含已知资源、
 近期观察和近期动作。持久化只保存 Transcript，Workspace 可以从账本恢复。
 
+### 观察结果成为可选的参数绑定
+
+按目录分页列举、按行读取和有界搜索产生带真实引用的历史观察视图。Jev 可以直接
+选择兼容引用及工具声明的默认参数，也始终可以为同一操作选择 `LLM_PARAMETERS`。
+部分绑定保持锁定，由 LLM 补齐其余参数；候选构造不机械匹配用户输入。
+所有路径共用参数校验和执行策略。详见[实现契约](docs/observation-view-contract.md)。
+
 ### 所有 Driver 共用一个 Runtime
 
 `JevDriver` 与 `PlainLlmDriver` 都只向同一个 `RuntimeKernel` 返回 proposal。Driver

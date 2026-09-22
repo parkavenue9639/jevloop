@@ -17,7 +17,8 @@ of Jev's confidence.
 import json
 import os
 
-from .guardrails import MalformedAuthoredValue
+from .arguments import argument_target, argument_text, arguments_complete, validate_arguments
+from .guardrails import InvalidProposal, MalformedAuthoredValue
 from .model import post_json
 from .text_helper import validate_authored_value
 from .transcript import tool_schemas
@@ -102,28 +103,11 @@ def _recovery_note_text(observation):
 
 
 def _scoped_tool_schemas(provider, jev_decision, valid_actions):
-    """Constrain target-bearing arbitration calls to Jev's offered candidates."""
-    options: dict[str, set[str]] = {}
-    surface = (
-        (jev_decision.get("request") or {}).get("state") or {}
-    ).get("decision_surface") or {}
-    for branch, keys in (surface.get("targets") or {}).items():
-        operation = str(branch).split("/", 1)[-1]
-        options.setdefault(operation, set()).update(str(key) for key in keys)
-
-    schemas = []
-    for schema in tool_schemas(provider):
-        name = schema["function"]["name"]
-        if name not in valid_actions:
-            continue
-        offered = sorted(options.get(name) or ())
-        properties = schema["function"]["parameters"].get("properties") or {}
-        if offered and "target" in properties:
-            properties["target"]["enum"] = offered
-        if offered and "targets" in properties:
-            properties["targets"]["items"]["enum"] = offered
-        schemas.append(schema)
-    return schemas
+    """Expose available operations with their open canonical parameter schema."""
+    # The observed shortcut window is not the tool's complete argument space.
+    # Runtime validation owns closed domain references and authorization.
+    return [schema for schema in tool_schemas(provider)
+            if schema["function"]["name"] in valid_actions]
 
 
 async def arbitrate(transcript, jev_decision, provider, valid_actions, post=None,
@@ -168,12 +152,30 @@ async def arbitrate(transcript, jev_decision, provider, valid_actions, post=None
         return {**common, "valid": False}  # truncated proposal, usage retained
     if action is None or action not in valid_actions:
         return {**common, "valid": False}
+    specs = {spec.name: spec for spec in provider.specs()}
+    calls = message.get("tool_calls") or []
+    if calls:
+        try:
+            args = json.loads(calls[0]["function"]["arguments"])
+            # Legacy targets need the actual Workspace and are validated by
+            # JevDriver. Canonical schemas can already be checked here.
+            spec = specs.get(action)
+            if not arguments_complete(spec, args, action):
+                return {**common, "valid": False}
+            if spec is None or spec.parameters is not None:
+                args = validate_arguments(spec, args, operation=action)
+                target = argument_target(spec, args)
+                content = argument_text(spec, args, action)
+            return {**common, "valid": True, "action": action, "target": target,
+                    "call_id": call_id, "content": content, "arguments": args,
+                    "message": message}
+        except (InvalidProposal, MalformedAuthoredValue, ValueError, TypeError, KeyError):
+            return {**common, "valid": False}
     if isinstance(target, list):
         if not target or any(not isinstance(item, str) for item in target):
             return {**common, "valid": False}
     elif target is not None:
         target = str(target)
-    specs = {spec.name: spec for spec in provider.specs()}
     if content is not None and not isinstance(content, str):
         return {**common, "valid": False}
     if isinstance(content, str):

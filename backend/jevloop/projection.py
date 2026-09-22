@@ -13,6 +13,7 @@ context is RECOVERED from it by an engineering method.
 import hashlib
 import json
 
+from .observations import normalize_observation, update_views
 from .state import PRIOR_ANSWER_EXCERPT_CHARS, ChatRef, DocRef, Workspace
 
 _EXEC_KEYS = {
@@ -32,6 +33,8 @@ def fingerprint(value) -> str:
 
 def intent_fingerprint(intent) -> str:
     """Hash of operation + canonical target + exact frozen authored arguments."""
+    if isinstance(intent, dict) and "arguments" in intent:
+        return fingerprint({"operation": intent.get("operation"), "arguments": intent["arguments"]})
     return fingerprint({
         "operation": (intent or {}).get("operation"),
         "target": (intent or {}).get("target"),
@@ -136,7 +139,7 @@ def _enrich(operation, outcome, workspace):
 
 
 def record_execution(transcript, operation, arguments, outcome, workspace,
-                    call_id=None, observation=None):
+                    call_id=None, observation=None, reference_kinds=None):
     """Write one finalized observation into the ledger — executed or refused.
     `call_id` reuses an existing pending tool_call (arbitration / genuine LLM
     turn) instead of ghost-writing a new assistant turn — a dangling id would
@@ -149,6 +152,8 @@ def record_execution(transcript, operation, arguments, outcome, workspace,
         call_id = transcript.append_action(operation, arguments or {})
     result = _enrich(operation, outcome, workspace)
     canonical = observation or {}
+    if "target" in canonical:
+        result["canonical_target"] = canonical["target"]
     for key in ("observation_id", "attempt_id", "phase", "dispatched"):
         if canonical.get(key) is not None:
             result[key] = canonical[key]
@@ -159,8 +164,77 @@ def record_execution(transcript, operation, arguments, outcome, workspace,
         result["observation_fingerprint"] = fingerprints["observation"]
     if canonical.get("provenance"):
         result["provenance"] = canonical["provenance"]
+    raw_view = outcome.get("observation")
+    if not isinstance(raw_view, dict):
+        raw_view = _legacy_observation(operation, arguments or {}, result)
+    view = normalize_observation(raw_view, operation=operation, call_id=call_id,
+                                 arguments=arguments, reference_kinds=reference_kinds)
+    if view is not None:
+        result["observation_view"] = view
+        result = _fit_observation_result(result)
     transcript.append_result(call_id, result)
+    # Providers already update legacy caches/notes. Only project the new view
+    # here, once; the kernel owns history. Replay uses exactly the persisted view.
+    if view is not None:
+        _apply_observation(workspace, view)
     return call_id
+
+
+def _fit_observation_result(result):
+    """Reserve the immutable observation envelope before generic ledger caps.
+
+    The generic serializer may shorten any string, including a reference path.
+    Fit other evidence first so it never needs to touch this view. An oversized
+    structural envelope fails closed instead of losing recovery references.
+    """
+    from .transcript import _bound_strings
+
+    reserved = {key: result[key] for key in ("observation_view", "canonical_target") if key in result}
+    other = {key: value for key, value in result.items() if key not in reserved}
+    fitted = dict(result)
+    cap = 2000
+    while len(json.dumps(fitted, ensure_ascii=False, default=str)) > 11800 and cap >= 64:
+        fitted = {**_bound_strings(other, cap), **reserved,
+                  "evidence_bounded": True}
+        cap //= 2
+    if len(json.dumps(fitted, ensure_ascii=False, default=str)) > 11800:
+        raise ValueError("Observation result exceeds ledger structural budget")
+    return fitted
+
+
+def _legacy_observation(operation, arguments, result):
+    """Compatibility projections from registered, structured result fields."""
+    raw = None
+    if operation == "BASH":
+        note = result.get("bash_note") or {}
+        output = result.get("output", note.get("output", result.get("output_excerpt", "")))
+        if output:
+            raw = {"scope": "sandbox", "evidence": str(output), "references": []}
+    if result.get("status") not in {"ready", "done"}:
+        return raw
+    if operation in {"LIST_FILES", "WRITE_FILE"}:
+        files = result.get("files") or []
+        raw = {"scope": "sandbox", "evidence": "\n".join(str(path) for path in files),
+               "references": [{"kind": "file", "value": path, "label": path} for path in files],
+               "truncated": operation == "LIST_FILES" and len(files) >= 20,
+               "note": "Legacy observed paths; not a complete or current inventory."}
+    elif operation == "READ_FILE":
+        records = result.get("file_results") or []
+        paths = [item.get("target") for item in records if item.get("status") == "ready"]
+        if not paths:
+            paths = result.get("read_files") or ([arguments["target"]] if arguments.get("target") else [])
+        evidence = "\n".join(str(item.get("content", "")) for item in records)
+        raw = {"scope": str(arguments.get("path") or arguments.get("target") or "sandbox"),
+               "evidence": evidence or result.get("content_excerpt", ""),
+               "references": [{"kind": "file", "value": path, "label": path} for path in paths],
+               "truncated": any(item.get("truncated") for item in records)}
+    return raw
+
+
+def _apply_observation(workspace, view):
+    workspace.observation_views = update_views(workspace.observation_views, view)
+    if view.get("reference_domain") == "sandbox":
+        workspace.file_observation_mode = True
 
 
 def rebuild_workspace(transcript) -> Workspace:
@@ -183,8 +257,14 @@ def rebuild_workspace(transcript) -> Workspace:
                 continue
             if isinstance(result, dict) and result.get("superseded"):
                 continue
-            _apply(workspace, name, result)
             arguments = _parse_arguments(call)
+            _apply(workspace, name, result)
+            view = result.get("observation_view")
+            if not isinstance(view, dict):
+                view = normalize_observation(_legacy_observation(name, arguments, result),
+                                             operation=name, call_id=call.get("id"), arguments=arguments)
+            if view is not None:
+                _apply_observation(workspace, view)
             if name == "ANSWER" and result.get("status") == "done" \
                     and not result.get("error"):
                 # recover the FULL successful ANSWER argument (the assistant
@@ -217,7 +297,7 @@ def _history_from_result(operation, arguments, result):
     return {
         "phase": result.get("phase"),
         "operation": operation,
-        "target": arguments.get("targets") or arguments.get("target"),
+        "target": result.get("canonical_target", arguments.get("targets") or arguments.get("target")),
         "status": result.get("status"),
         "exit": result.get("exit"),
         "disposition": _read_disposition(result),

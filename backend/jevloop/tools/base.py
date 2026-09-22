@@ -18,11 +18,12 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class ToolSpec:
-    """A tool's full parameter surface. The question compiler turns this into
-    Jev questions: target_pool(+filter/+extra) -> a speculative choice head;
-    needs_text -> an LLM generation turn after selection (browser-use's
-    TYPE_TEXT division). Static enums/scalars should be folded into target
-    keys (target_extra) or given defaults — keep the question surface small."""
+    """One executable argument contract shared by every driver.
+
+    Observed references and declared defaults provide optional bindings;
+    LLM_PARAMETERS always allows the selected operation's open arguments.
+    needs_target/needs_text adapt legacy providers, not canonical schemas.
+    """
     name: str                      # action name Jev chooses, e.g. "OPEN_CHAT"
     description: str               # criteria text shown to Jev
     needs_text: bool = False       # LLM writes text before execution
@@ -37,6 +38,11 @@ class ToolSpec:
     write: bool = False            # external mutation: policy/confidence/write budget
     mutates_workspace: bool = False  # isolated session-local mutation, step budget only
     recipient_gate: bool = False   # write whose target must be an allowed recipient
+    parameters: dict | None = None  # canonical JSON-schema; None adapts legacy target/text
+    target_parameter: str = "target"  # field bound from an observed target_pool reference
+    binding_defaults: dict | None = None  # safe defaults, not task-dependent inference
+    argument_validator: object = None  # pure, idempotent pre-dispatch validation/normalization
+    observation_kinds: tuple[str, ...] = ()  # registered result-reference kinds, never raw text
 
 
 @dataclass
@@ -47,6 +53,7 @@ class ToolContext:
     live: bool = False
     intent_id: str | None = None
     idempotency_key: str | None = None
+    arguments: dict | None = None  # complete, validated, frozen canonical arguments
 
 
 def text_field_for(operation: str) -> str:

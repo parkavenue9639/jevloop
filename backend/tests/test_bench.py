@@ -74,6 +74,15 @@ def test_check_answer_substring_case_insensitive():
     assert checks == [{"name": "answer contains 'Done'", "ok": True}]
 
 
+def test_parameter_authoring_is_counted_separately_in_lane_totals():
+    totals = bench._lane_totals([{"metrics": {"helper": {"by_kind": {
+        "parameter_authoring": {"calls": 3}, "authoring": {"calls": 1},
+        "arbitration": {"calls": 2}}}}}])
+    assert totals["parameter_authoring_calls"] == 3
+    assert totals["authoring_calls"] == 1
+    assert totals["arbitration_calls"] == 2
+
+
 def test_check_answer_max_chars_and_any():
     checks = bench._check_answer(
         _turn(contains_any=["sunrise", "ocean"], max_chars=3), "ocean")

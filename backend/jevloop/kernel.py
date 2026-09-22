@@ -11,8 +11,18 @@ Jev lane); terminal policy/budget denials and UNKNOWN effects stop the run.
 
 import hashlib
 import inspect
+import json
 import uuid
+from copy import deepcopy
 
+from .argument_helper import generate_arguments
+from .arguments import (
+    argument_target,
+    argument_text,
+    arguments_complete,
+    parameter_schema,
+    validate_arguments,
+)
 from .drivers import DriverContext
 from .guardrails import (
     AttemptFailure,
@@ -56,7 +66,7 @@ class RuntimeKernel:
                  max_writes=None, metrics=None, texter=None, transcript=None,
                  workspace=None, event_sink=None, checkpoint=None, cache_scope=None,
                  auto_acknowledge_unknown=False,
-                 max_identical_failures=DEFAULT_MAX_IDENTICAL_FAILURES,
+                 max_identical_failures=DEFAULT_MAX_IDENTICAL_FAILURES, arguer=None,
                  max_stale_observations=DEFAULT_MAX_STALE_OBSERVATIONS):
         self.driver = driver
         self.provider = provider
@@ -74,6 +84,7 @@ class RuntimeKernel:
         # explicit resolution contract — a real external effect may exist.
         self.auto_acknowledge_unknown = auto_acknowledge_unknown
         self._text = texter or generate_text
+        self._arguments = arguer or generate_arguments
         self._event_sink = event_sink
         self._checkpoint_hook = checkpoint
         self._cache_scope = cache_scope
@@ -203,8 +214,14 @@ class RuntimeKernel:
                 if proposal.transcript_note:
                     self.transcript.append_note(proposal.transcript_note)
                 if proposal.assistant_message:
+                    message = deepcopy(proposal.assistant_message)
+                    if "arguments" in proposal.decision:
+                        for call in message.get("tool_calls") or []:
+                            if call.get("id") == proposal.decision.get("ledger_call_id"):
+                                call["function"]["arguments"] = json.dumps(
+                                    proposal.decision["arguments"], ensure_ascii=False)
                     self._commit_assistant(
-                        proposal.assistant_message,
+                        message,
                         proposal.decision.get("ledger_call_id"))
                 decision = proposal.decision
                 step = {
@@ -220,6 +237,10 @@ class RuntimeKernel:
                      or decision["operation"] == "ANSWER")
                     and not decision.get("ledger_content")
                 )
+                if "bound_arguments" in decision:
+                    needs_authoring = (decision.get("binding_mode") == "llm_parameters"
+                                       or not arguments_complete(selected_spec,
+                                           decision["bound_arguments"], decision["operation"]))
                 await self._emit({
                     "type": "decision_ready",
                     "attempt_id": attempt_id,
@@ -267,7 +288,7 @@ class RuntimeKernel:
                 try:
                     action = "continue"
                     if before_step:
-                        action = before_step(decision)
+                        action = before_step(deepcopy(decision))
                         if inspect.isawaitable(action):
                             action = await action
                     if action == "abort":
@@ -363,7 +384,7 @@ class RuntimeKernel:
         if model_calls and not step["model_calls"]:
             step["model_calls"].extend(model_calls)
         if helper:
-            kind = ("authoring" if isinstance(failure, MalformedAuthoredValue)
+            kind = helper.get("kind") or ("authoring" if isinstance(failure, MalformedAuthoredValue)
                     else ("arbitration" if self.driver.name == "jev"
                           else "plain_decision"))
             self.metrics.helper(helper, kind=kind)
@@ -464,6 +485,9 @@ class RuntimeKernel:
             else:
                 disposition = "SUCCEEDED"
         error = outcome.get("error")
+        if error is not None and not isinstance(error, dict):
+            outcome["provider_error"] = str(error)[:500]
+            error = None
         if error is None:
             if disposition == "UNKNOWN":
                 error = {"code": "EFFECT_UNKNOWN", "kind": "execution",
@@ -556,6 +580,8 @@ class RuntimeKernel:
                 self.workspace,
                 call_id=call_id,
                 observation=observation,
+                reference_kinds=(self._spec[operation].observation_kinds
+                                 if operation in self._spec else ()),
             )
             return
         error = outcome.get("error") or {}
@@ -727,6 +753,8 @@ class RuntimeKernel:
         operation = decision["operation"]
         target = decision.get("target")
         spec = self._spec.get(operation)
+        if "arguments" in decision or "bound_arguments" in decision:
+            return await self._materialize_arguments(decision, spec)
         if isinstance(target, (list, tuple)):
             if (
                 not spec
@@ -777,6 +805,57 @@ class RuntimeKernel:
             "workspace_mutation": bool(spec and spec.mutates_workspace),
         }
 
+    async def _materialize_arguments(self, decision, spec):
+        operation = decision["operation"]
+        helper = None
+        supplied = "arguments" in decision
+        args = deepcopy(decision.get("arguments", decision.get("bound_arguments", {})))
+        bound = deepcopy(args)
+        force_parameters = (decision.get("binding_mode") == "llm_parameters"
+                            and bool(parameter_schema(spec, operation).get("properties")))
+        if not supplied and (force_parameters or not arguments_complete(spec, args, operation)):
+            args, helper = await self._arguments(self.transcript, spec, operation, args)
+        try:
+            if not supplied and any(key not in args or args[key] != value
+                                    for key, value in bound.items()):
+                raise InvalidProposal("Parameter helper changed a bound argument.")
+            args = validate_arguments(spec, args, self.workspace, operation)
+            if supplied and args != bound:
+                raise InvalidProposal("Revalidation changed already committed arguments; normalizers must be idempotent.")
+            if not supplied and any(key not in args or args[key] != value
+                                    for key, value in bound.items()):
+                raise InvalidProposal("Argument normalization changed a bound argument.")
+            target = argument_target(spec, args)
+            text = argument_text(spec, args, operation)
+            self._reject_operation_echo(operation, text)
+        except AttemptFailure as failure:
+            failure.helper_info = helper
+            raise
+        if helper:
+            self.metrics.helper(helper, kind=helper.get("kind", "parameter_authoring"))
+            # Keep genuine helper-authored calls, but never commit a rejected
+            # parameter response or create a second dangling executable call.
+            response = helper.get("response") or {}
+            calls = response.get("tool_calls") or []
+            if calls:
+                call = deepcopy(calls[0])
+                call["function"]["arguments"] = json.dumps(args, ensure_ascii=False)
+                if helper.get("note"):
+                    self.transcript.append_user(helper["note"])
+                self._commit_assistant({"role": "assistant", "content": response.get("content"),
+                                        "tool_calls": [call]}, call["id"])
+                decision["ledger_call_id"] = call["id"]
+        decision.update({"arguments": deepcopy(args), "target": deepcopy(target), "ledger_content": text})
+        intent_id = uuid.uuid4().hex
+        return {
+            "intent_id": intent_id,
+            "idempotency_key": hashlib.sha256(intent_id.encode()).hexdigest()[:50],
+            "operation": operation, "arguments": deepcopy(args), "target": deepcopy(target),
+            "phase": decision.get("phase"), "text": text, "helper": helper,
+            "write": bool(spec and spec.write),
+            "workspace_mutation": bool(spec and spec.mutates_workspace),
+        }
+
     async def _invoke_texter(self, instruction, field, operation):
         """Call the authoring helper with supported typed-envelope metadata."""
         texter = self._text
@@ -805,6 +884,7 @@ class RuntimeKernel:
                 hashlib.sha256(text.encode()).hexdigest() if text is not None else None
             ),
             "text_length": len(text) if text is not None else 0,
+            "arguments_sha256": fingerprint(intent.get("arguments", self._ledger_arguments(intent))),
         }
 
     async def _emit(self, event):
@@ -823,6 +903,8 @@ class RuntimeKernel:
 
     @staticmethod
     def _ledger_arguments(intent):
+        if "arguments" in intent:
+            return deepcopy(intent["arguments"])
         arguments = {}
         target = intent.get("target")
         if isinstance(target, (list, tuple)):
@@ -888,6 +970,7 @@ class RuntimeKernel:
                 live=self.live,
                 intent_id=intent["intent_id"],
                 idempotency_key=intent["idempotency_key"],
+                arguments=deepcopy(intent.get("arguments")),
             ))
             if text:
                 outcome.setdefault("text", text[:4000])

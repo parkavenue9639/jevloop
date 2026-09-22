@@ -10,6 +10,7 @@ import os
 import time
 from dataclasses import dataclass, field
 
+from .arguments import argument_target, argument_text, validate_arguments
 from .config import (
     DEFAULT_AMBIGUITY_GATE,
     DEFAULT_ANSWER_PROGRESS_FLOOR,
@@ -18,8 +19,7 @@ from .config import (
 from .escalation import arbitrate, latest_recoverable, should_escalate
 from .guardrails import InvalidProposal, MalformedAuthoredValue
 from .model import action_catalog, choose, compile_questions, post_json
-from .text_helper import _clean, validate_authored_value
-from .tools.base import text_field_for
+from .text_helper import _clean
 from .transcript import full_tool_schemas
 
 
@@ -160,13 +160,21 @@ class JevDriver:
         ambiguity_gate = self.ambiguity_gate
         if selected_spec and (selected_spec.write or selected_spec.mutates_workspace):
             ambiguity_gate = None
-        if should_escalate(jev_decision, threshold, ambiguity_gate):
+        operation_routing = {**jev_decision, "confidence": jev_decision.get(
+            "operation_path_confidence", jev_decision.get("confidence"))}
+        if should_escalate(operation_routing, threshold, ambiguity_gate):
             reason = "low_confidence"
         elif recoverable is not None and threshold is not None:
             reason = "recoverable_observation"
         elif self._premature_answer(jev_decision, workspace):
             reason = "premature_answer"
         if reason is None:
+            if (threshold is not None and jev_decision.get("operation_path_confidence") is not None
+                    and jev_decision.get("confidence", 1) < threshold):
+                # A weak binding does not require choosing the operation again.
+                jev_decision = {**jev_decision, "binding_mode": "llm_parameters",
+                                "bound_arguments": {}, "target": None,
+                                "confidence": operation_routing["confidence"]}
             return DriverProposal(
                 decision=jev_decision,
                 base_decision=jev_decision,
@@ -207,8 +215,18 @@ class JevDriver:
             original_phase if original_phase in selected_phases
             else (selected_phases[0] if selected_phases else None)
         )
-        resolved = resolve_target(
-            workspace, provider, action, verdict.get("target"), compiled)
+        chosen_spec = next((spec for spec in provider.specs() if spec.name == action), None)
+        canonical = verdict.get("arguments")
+        if canonical is not None:
+            try:
+                canonical = validate_arguments(chosen_spec, canonical, workspace, action)
+            except InvalidProposal as error:
+                return self._invalid_arbitration_fallback(
+                    jev_decision, note=note, helper=helper, model_calls=model_calls, reason=str(error))
+            resolved = argument_target(chosen_spec, canonical)
+        else:
+            resolved = resolve_target(
+                workspace, provider, action, verdict.get("target"), compiled)
         if resolved is None and _target_required(provider, action):
             offered = sorted(_target_map(workspace, provider, compiled).get(action) or {})
             return self._invalid_arbitration_fallback(
@@ -236,6 +254,10 @@ class JevDriver:
                 verdict.get("call_id") if verdict.get("message") else None),
             "ledger_content": verdict.get("content"),
         })
+        if canonical is not None:
+            decision["arguments"] = canonical
+            decision["ledger_content"] = argument_text(chosen_spec, canonical, action)
+        decision["binding_mode"] = "arbitrated"
         if resolved is None:
             decision["target_confidence"] = None
             decision["target_probabilities"] = {}
@@ -326,6 +348,7 @@ class PlainLlmDriver:
         call_id = None
         target = None
         content = None
+        args = None
         if calls:
             call = calls[0]
             call_id = call.get("id")
@@ -380,42 +403,18 @@ class PlainLlmDriver:
                     assistant_message=assistant_message,
                     pending_call_id=call_id,
                 )
-            target = args.get("targets") if "targets" in args else (
-                args.get("target") or args.get("chat_id") or args.get("token")
-            )
-            target = resolve_target(context.workspace, context.provider, operation, target)
-            if target is None and _target_required(context.provider, operation):
-                raise DriverRejected(
-                    f"Plain LLM selected no valid target for {operation}.",
-                    helper_info=helper, request=request,
-                    base_decision=base_decision,
-                    assistant_message=assistant_message,
-                    pending_call_id=call_id,
-                )
-            content = args.get(text_field_for(operation))
+            spec = next((item for item in context.provider.specs() if item.name == operation), None)
             try:
-                normalized_content = (
-                    validate_authored_value(content)
-                    if isinstance(content, str) else "")
-            except MalformedAuthoredValue as error:
+                args = validate_arguments(spec, args, context.workspace, operation)
+            except (InvalidProposal, MalformedAuthoredValue) as error:
                 raise DriverRejected(
                     str(error), helper_info=helper, request=request,
-                    base_decision=base_decision, details=error.details,
+                    base_decision=base_decision, details=getattr(error, "details", None),
                     assistant_message=assistant_message,
                     pending_call_id=call_id,
                 ) from error
-            spec = next(
-                (item for item in context.provider.specs() if item.name == operation), None)
-            if (operation == "ANSWER" or (spec and spec.needs_text)) and not normalized_content:
-                raise DriverRejected(
-                    f"Plain LLM selected text-bearing action {operation} without content.",
-                    helper_info=helper, request=request,
-                    base_decision=base_decision,
-                    assistant_message=assistant_message,
-                    pending_call_id=call_id,
-                )
-            if content is not None:
-                content = normalized_content
+            target = argument_target(spec, args)
+            content = argument_text(spec, args, operation)
         else:
             content = (message.get("content") or "").strip()
             try:
@@ -441,6 +440,9 @@ class PlainLlmDriver:
             "ledger_content": content,
             "turn": self.turn,
         }
+        if args is not None:
+            decision["arguments"] = args
+        decision["binding_mode"] = "plain_llm"
         return DriverProposal(
             decision=decision,
             base_decision=decision,

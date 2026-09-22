@@ -17,14 +17,10 @@ def mounted():
 
 
 def test_blank_workspace_compiles_branch_specific_write_target():
-    questions, compiled = compile_questions(Workspace(), mounted())
-    head = compiled.target_heads[("ACT", "WRITE_FILE")]
-    assert questions[head]["criteria"] == {
-        "NEW": {"file": "create a new file; its name is the first line "
-                        "of the written content"}
-    }
-    assert not any(operation == "READ_FILE"
-                   for _phase, operation in compiled.target_heads)
+    _questions, compiled = compile_questions(Workspace(), mounted())
+    assert compiled.target_constants[("ACT", "WRITE_FILE")] == "LLM_PARAMETERS"
+    assert compiled.target_constants[("INSPECT", "READ_FILE")] == "LLM_PARAMETERS"
+    assert "READ_FILE" in compiled.phase_actions["INSPECT"]
 
 
 def test_same_pool_gets_distinct_branch_heads():
@@ -46,12 +42,13 @@ def test_target_criteria_carry_labels_without_cross_action_leaks():
     questions, compiled = compile_questions(ws, mounted())
     read_head = compiled.target_heads[("INSPECT", "READ_FILE")]
     write_head = compiled.target_heads[("ACT", "WRITE_FILE")]
-    assert questions[read_head]["criteria"] == {
-        "notes.md": {"file": "notes.md"}
-    }
+    assert questions[read_head]["criteria"]["notes.md"]["file"] == "notes.md"
+    assert '"limit": 200' in questions[read_head]["criteria"]["notes.md"]["arguments"]
+    assert "LLM_PARAMETERS" in questions[read_head]["criteria"]
     write_criteria = questions[write_head]["criteria"]
-    assert write_criteria["notes.md"] == {"file": "notes.md"}
-    assert "new file" in write_criteria["NEW"]["file"].lower()
+    assert write_criteria["notes.md"]["file"] == "notes.md"
+    assert "LLM_PARAMETERS" in write_criteria
+    assert "NEW" not in write_criteria
 
 
 def test_target_filter_narrows_compatibility():
@@ -76,7 +73,7 @@ def test_target_filter_narrows_compatibility():
     ws.chats["oc_dm"] = ChatRef(id="oc_dm", name="dm", p2p=True)
     questions, compiled = compile_questions(ws, P2pOnly())
     head = compiled.target_heads[("INSPECT", "P2P_PING")]
-    assert set(questions[head]["criteria"]) == {"oc_dm"}
+    assert set(questions[head]["criteria"]) == {"oc_dm", "LLM_PARAMETERS"}
 
 
 def test_phase_and_action_criteria_follow_state_gating():
@@ -87,7 +84,7 @@ def test_phase_and_action_criteria_follow_state_gating():
     actions = set().union(*compiled.phase_actions.values())
     assert {"LIST_CHATS", "WRITE_FILE", "BASH", "ANSWER"} <= actions
     assert not {"DONE", "BLOCKED"} & actions
-    assert "OPEN_CHAT" not in actions
+    assert "OPEN_CHAT" in actions
 
 
 class BranchProvider:
@@ -189,7 +186,7 @@ def test_multi_file_selection_degrades_to_scalar_when_all_members_skip(monkeypat
             target_head: {
                 "choice": "a.md",
                 "confidence": 0.75,
-                "probabilities": {"a.md": 0.75, "b.md": 0.25},
+                "probabilities": {"a.md": 0.75, "b.md": 0.20, "LLM_PARAMETERS": 0.05},
             },
         }
         for head in compiled.target_member_heads[branch].values():
@@ -230,6 +227,10 @@ def test_choose_consumes_selected_heads_and_takes_minimum_confidence(monkeypatch
                 "probabilities": {"PING": 0.55, "PONG": 0.45},
             },
             "action__act": "malformed but unselected",
+            "target__inspect__ping": {
+                "choice": "DEFAULT_ARGUMENTS", "confidence": 0.99,
+                "probabilities": {"DEFAULT_ARGUMENTS": 0.99, "LLM_PARAMETERS": 0.01},
+            },
         }}
 
     monkeypatch.setattr(model, "post_json", fake_post)
@@ -243,7 +244,7 @@ def test_choose_consumes_selected_heads_and_takes_minimum_confidence(monkeypatch
     assert decision["operation"] == "PING"
     assert decision["confidence"] == 0.55
     assert [head["role"] for head in decision["consumed_heads"]] == [
-        "phase", "action",
+        "phase", "action", "target",
     ]
     assert "must-not-be-duplicated" not in str(captured)
     assert captured["state"]["goal"] == "goal"
@@ -273,6 +274,10 @@ def test_choose_parses_meta_signals_leniently(monkeypatch):
 
     def answers_with(meta):
         payload = {
+            "target__inspect__ping": {
+                "choice": "DEFAULT_ARGUMENTS", "confidence": 0.99,
+                "probabilities": {"DEFAULT_ARGUMENTS": 0.99, "LLM_PARAMETERS": 0.01},
+            },
             "phase": {
                 "choice": "INSPECT",
                 "confidence": 0.9,

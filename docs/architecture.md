@@ -1,5 +1,10 @@
 # Architecture
 
+Current parameter-binding extension: [Observation views contract](observation-view-contract.md).
+It supersedes the older target-enumeration/text-authoring split where they differ:
+all tools expose canonical schemas, observation-grounded shortcuts are optional,
+and every operation retains an LLM parameter-authoring path.
+
 Status: **design of record**, agreed 2026-09-21. Section 2 describes the code as
 merged on that date (the containerized sandbox, Phase M1, is landing in the same
 changeset and is marked accordingly). Sections 3–7 specify the target the

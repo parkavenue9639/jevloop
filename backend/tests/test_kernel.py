@@ -152,7 +152,7 @@ def test_plain_missing_required_content_is_answered_never_executed():
     steps = collect(kernel)
 
     assert provider.executed == []
-    assert "without content" in steps[0]["denied"]
+    assert "non-empty usable content" in steps[0]["denied"]
     # the provider-valid call is committed and answered exactly once with the
     # typed rejection — no ghost-written execution, no dangling id
     messages = kernel.transcript.messages()

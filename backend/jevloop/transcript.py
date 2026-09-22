@@ -85,59 +85,10 @@ def tool_schemas(provider) -> list:
 def full_tool_schemas(provider) -> list:
     """Function-calling schemas with complete arguments — the baseline's surface
     (the LLM authors queries/content/arguments itself, as in a native loop)."""
-    schemas = []
-    for spec in provider.specs():
-        props = {}
-        required = []
-        target_alternatives = None
-        if spec.needs_target:
-            props["target"] = {
-                "type": "string",
-                "description": "one target key offered in context",
-            }
-            if spec.multi_target_max > 1:
-                props["targets"] = {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "minItems": 2,
-                    "maxItems": spec.multi_target_max,
-                    "uniqueItems": True,
-                    "description": "independently needed target keys offered in context",
-                }
-                target_alternatives = [
-                    {"required": ["target"]},
-                    {"required": ["targets"]},
-                ]
-            else:
-                required.append("target")
-        if spec.needs_text:
-            key = "query" if spec.name.startswith("SEARCH") else "content"
-            props[key] = {"type": "string", "description": spec.text_instruction[:300]}
-            required.append(key)
-        parameters = {
-            "type": "object",
-            "properties": props,
-            "required": required,
-            "additionalProperties": False,
-        }
-        if target_alternatives:
-            parameters["oneOf"] = target_alternatives
-        schemas.append({"type": "function", "function": {
-            "name": spec.name, "description": spec.description,
-            "parameters": parameters,
-        }})
-    return schemas + [
-        {"type": "function", "function": {
-            "name": "ANSWER",
-            "description": "Deliver the final answer/summary to the user; ends the run.",
-            "parameters": {"type": "object",
-                           "properties": {"answer": {"type": "string"}},
-                           "required": ["answer"]}}},
-        {"type": "function", "function": {
-            "name": "DONE",
-            "description": "Declare the goal satisfied; nothing left to report.",
-            "parameters": {"type": "object", "properties": {}, "required": []}}},
-    ]
+    from .arguments import function_schema
+
+    return [function_schema(spec) for spec in provider.specs()] + [
+        function_schema(operation="ANSWER"), function_schema(operation="DONE")]
 
 
 class Transcript:

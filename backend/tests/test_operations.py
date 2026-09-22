@@ -12,8 +12,8 @@ def test_blank_workspace_starts_with_gather_actions_and_answer():
     # ANSWER is always offered: meta-questions ("what can you do?") need no material
     assert "ANSWER" in actions
     assert "DONE" not in actions and "BLOCKED" not in actions
-    # target-dependent tools are absent until the workspace knows targets
-    assert "OPEN_CHAT" not in actions and "SEND_MESSAGE" not in actions
+    # No shortcut candidates does not hide the operation or its LLM binding.
+    assert "OPEN_CHAT" in actions and "SEND_MESSAGE" in actions
 
 
 def test_known_chats_unlock_target_tools():

@@ -5,6 +5,8 @@ import asyncio
 from .drivers import DriverProposal
 from .guardrails import WritePolicy
 from .kernel import RuntimeKernel
+from .state import Workspace
+from .tools.base import ToolContext
 from .tools.sandbox import DockerSandboxContainer, DockerSandboxImage, SandboxTools
 
 
@@ -36,6 +38,67 @@ class SmokeDriver:
             "ledger_content": content,
         }
         return DriverProposal(decision=decision, base_decision=decision)
+
+
+async def check_canonical_tools(container):
+    """Exercise open arguments through the provider and real sandbox helpers.
+
+    A separate workspace keeps these checks out of the legacy kernel metrics.
+    The caller owns the disposable container and its cleanup.
+    """
+    provider = SandboxTools(container)
+    workspace = Workspace()
+
+    async def execute(operation, **arguments):
+        outcome = await provider.execute(operation, ToolContext(
+            workspace=workspace, arguments=arguments))
+        assert outcome["status"] == "ready", (operation, outcome)
+        return outcome
+
+    content = "not-a-filename\n第二行🙂\ncanonical-search-marker\n"
+    written = await execute("WRITE_FILE", path="observation-smoke/a.txt", content=content)
+    assert written["changed_files"] == ["observation-smoke/a.txt"]
+    assert await container.read_file("observation-smoke/a.txt") == content
+    await execute("WRITE_FILE", path="observation-smoke/child/nested.txt", content="nested")
+    await execute("WRITE_FILE", path="observation-smoke/z.txt", content="last")
+
+    root = (await execute("LIST_FILES"))["observation"]
+    assert "observation-smoke/a.txt" not in root["evidence"]
+    assert any(ref["kind"] == "directory" and ref["value"] == "observation-smoke"
+               for ref in root["references"])
+    first = (await execute("LIST_FILES", path="observation-smoke", limit=1))["observation"]
+    assert first["references"] == [{
+        "kind": "file", "value": "observation-smoke/a.txt", "label": "observation-smoke/a.txt"}]
+    assert first["truncated"] is True and first["next_offset"] == 1
+    second = (await execute("LIST_FILES", path="observation-smoke",
+                            offset=first["next_offset"], limit=1))["observation"]
+    assert second["references"] == [{
+        "kind": "directory", "value": "observation-smoke/child",
+        "label": "observation-smoke/child"}]
+    assert "nested.txt" not in second["evidence"]
+
+    read = await execute("READ_FILE", path="observation-smoke/a.txt", offset=1, limit=1)
+    assert read["file_results"][0]["content"] == "第二行🙂\n"
+    assert read["file_results"][0]["next_offset"] == 2
+    assert read["observation"]["unit"] == "lines" and read["observation"]["truncated"]
+    multiple = await execute("READ_FILE", path=["observation-smoke/a.txt",
+                                               "observation-smoke/z.txt"], limit=1)
+    assert multiple["read_files"] == ["observation-smoke/a.txt", "observation-smoke/z.txt"]
+
+    search = await execute("SEARCH_FILES", path="observation-smoke",
+                           pattern="canonical-search-marker", glob="*.txt", limit=5)
+    assert len(search["matches"]) == 1
+    assert "canonical-search-marker" in search["observation"]["evidence"]
+    assert search["observation"]["references"] == [{
+        "kind": "file", "value": "observation-smoke/a.txt", "label": "observation-smoke/a.txt"}]
+
+    before = dict(workspace.files)
+    bash = await execute("BASH", command="printf 'invented.txt\\nfolder/\\nnot a file listing'")
+    assert bash["observation"]["evidence"] == "invented.txt\nfolder/\nnot a file listing"
+    assert bash["observation"]["references"] == []
+    assert workspace.files == before
+    return ["write_path_content", "list_scoped_pagination", "read_line_range",
+            "read_multiple", "search_references", "bash_raw_no_references"]
 
 
 async def run_smoke():
@@ -77,6 +140,7 @@ async def run_smoke():
             note.get("kind") == "bash" and "bash-ok" in note.get("output", "")
             for note in kernel.workspace.notes
         )
+        canonical_checks = await check_canonical_tools(container)
         return {
             "ok": True,
             "image_id": image.image_id,
@@ -85,6 +149,7 @@ async def run_smoke():
             "writes": kernel.budget.writes,
             "events": event_types,
             "checkpoints": len(checkpoints),
+            "canonical_checks": canonical_checks,
         }
     finally:
         if container is not None:

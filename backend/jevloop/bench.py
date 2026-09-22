@@ -384,7 +384,7 @@ def _lane_totals(turns: list[dict]) -> dict:
     totals = {
         "turns": len(turns),
         "elapsed_ms": 0, "steps": 0, "direct_jev_steps": 0, "llm_assisted_jev_steps": 0,
-        "jev_calls": 0, "authoring_calls": 0, "arbitration_calls": 0,
+        "jev_calls": 0, "authoring_calls": 0, "parameter_authoring_calls": 0, "arbitration_calls": 0,
         "plain_decision_calls": 0, "escalations_upheld": 0, "escalations_overridden": 0,
         "jev_cost_usd": 0.0, "llm_cost_usd": 0.0,
     }
@@ -401,6 +401,7 @@ def _lane_totals(turns: list[dict]) -> dict:
         helper = metrics.get("helper") or {}
         totals["llm_cost_usd"] += helper.get("est_cost_usd", 0) or 0
         for kind, key in (("authoring", "authoring_calls"),
+                          ("parameter_authoring", "parameter_authoring_calls"),
                           ("arbitration", "arbitration_calls"),
                           ("plain_decision", "plain_decision_calls")):
             totals[key] += (helper.get("by_kind") or {}).get(kind, {}).get("calls", 0)
@@ -544,7 +545,7 @@ async def _run_scenario(scenario: Scenario, image, ctx: BenchContext) -> dict:
 def _aggregate(scenarios: list[dict]) -> dict:
     lanes = {lane: {"turns": 0, "elapsed_ms": 0, "steps": 0, "direct_jev_steps": 0,
                     "llm_assisted_jev_steps": 0, "jev_calls": 0, "authoring_calls": 0,
-                    "arbitration_calls": 0, "plain_decision_calls": 0,
+                    "parameter_authoring_calls": 0, "arbitration_calls": 0, "plain_decision_calls": 0,
                     "escalations_upheld": 0, "escalations_overridden": 0,
                     "jev_cost_usd": 0.0, "llm_cost_usd": 0.0, "cost_usd": 0.0}
              for lane in LANES}
@@ -671,6 +672,13 @@ def render_markdown(report: dict) -> str:
             f"elapsed {_pct(comparison['elapsed_delta_pct'])} vs baseline, "
             f"cost {_pct(comparison['cost_delta_pct'])} vs baseline "
             f"({_usd(comparison['cost_delta_usd'])})")
+        lines.extend(["", "| lane | parameter authoring | content authoring | arbitration | plain decisions |",
+                      "|---|---|---|---|---|"])
+        for lane in LANES:
+            totals = scenario["lanes"][lane]["totals"]
+            lines.append(f"| {lane} | {totals.get('parameter_authoring_calls', 0)} "
+                         f"| {totals['authoring_calls']} | {totals['arbitration_calls']} "
+                         f"| {totals['plain_decision_calls']} |")
         errors = [
             (lane, record)
             for lane in LANES

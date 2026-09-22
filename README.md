@@ -101,6 +101,15 @@ The LLM reads the complete `Transcript`. Jev reads a bounded `Workspace`
 projection containing known resources, recent observations, and recent actions.
 Only the transcript is persisted; workspace state is recoverable.
 
+### Observations become optional argument bindings
+
+Scoped listing, ranged reads and bounded search produce historical observation
+views with grounded references. Jev may bind a compatible reference and declared
+defaults directly, or choose `LLM_PARAMETERS` for the same operation. Partial
+bindings stay locked while the LLM fills missing fields. No user-text matching
+generates candidates; all paths share argument validation and execution policy.
+See the [implementation contract](docs/observation-view-contract.md).
+
 ### One runtime for every driver
 
 `JevDriver` and `PlainLlmDriver` return one proposal to the same
