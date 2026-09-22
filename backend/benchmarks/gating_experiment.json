@@ -1,0 +1,84 @@
+{
+  "experiment": "jev-layered-gates-v1",
+  "description": "Two-stage search for a safe Pareto frontier over Jev confidence, Noul ambiguity, and first-answer progress gates.",
+  "suites": [
+    "benchmarks/scenarios.json",
+    "benchmarks/fastapi_case.json"
+  ],
+  "repeats_per_arm": 5,
+  "execution_order": "round_robin_by_repeat",
+  "primary_constraints": {
+    "hard_turn_pass_rate": 1.0,
+    "scenario_pass_rate": 1.0,
+    "unknown_effects": 0,
+    "terminal_denials": 0
+  },
+  "pareto_objectives": {
+    "maximize": [
+      "jev_llm_avoidance_rate"
+    ],
+    "minimize": [
+      "jev_cost_usd",
+      "llm_cost_usd",
+      "elapsed_ms",
+      "escalations_overridden"
+    ]
+  },
+  "diagnostics": [
+    "decision_steps",
+    "direct_jev_steps",
+    "llm_assisted_jev_steps",
+    "authoring_calls",
+    "arbitration_calls",
+    "escalation_reason",
+    "ambiguity",
+    "progress_score",
+    "cache_hit_tokens",
+    "malformed_authoring_denials"
+  ],
+  "stage_1_ambiguity": [
+    {
+      "name": "confidence-only",
+      "escalate_threshold": 0.5,
+      "ambiguity_gate": null,
+      "answer_progress_floor": null
+    },
+    {
+      "name": "ambiguity-030",
+      "escalate_threshold": 0.5,
+      "ambiguity_gate": 0.3,
+      "answer_progress_floor": null
+    },
+    {
+      "name": "ambiguity-040",
+      "escalate_threshold": 0.5,
+      "ambiguity_gate": 0.4,
+      "answer_progress_floor": null
+    },
+    {
+      "name": "ambiguity-050",
+      "escalate_threshold": 0.5,
+      "ambiguity_gate": 0.5,
+      "answer_progress_floor": null
+    }
+  ],
+  "stage_2_progress": {
+    "promote_ambiguity_arms": 2,
+    "answer_progress_floors": [
+      null,
+      1.0,
+      1.5,
+      2.0,
+      2.5
+    ]
+  },
+  "stage_3_confidence": {
+    "promote_combined_arms": 2,
+    "escalate_thresholds": [
+      0.4,
+      0.5,
+      0.6
+    ]
+  },
+  "selection_rule": "Reject any arm violating a primary constraint. From the remaining arms, retain the non-dominated cost/latency/avoidance frontier; choose the lowest-cost arm whose verified pass rate matches confidence-only in every repeat. Break ties by fewer overridden escalations, then lower elapsed_ms."
+}

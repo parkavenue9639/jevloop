@@ -1,0 +1,85 @@
+{
+  "case": "fastapi-6turn-20260922",
+  "models": [
+    "deepseek-chat",
+    "jev-latest"
+  ],
+  "redaction": {
+    "removed": [
+      "prompts and model message content",
+      "model response and final-answer content",
+      "tool targets and tool output content",
+      "recipient identities and cache scope identifiers",
+      "denial and arbitration free text"
+    ],
+    "retained": [
+      "event ordering and relative timing",
+      "operations, dispositions, budgets, and content hashes",
+      "model labels, token usage, routing, latency, and cost metrics",
+      "intent, effect, and verification fingerprints"
+    ]
+  },
+  "run_ids": [
+    "6b8d05c853eb",
+    "4fd790278ced",
+    "580d508120ef",
+    "2fdbe673cb88",
+    "c50dafb5b94e",
+    "ed280f843333"
+  ],
+  "sandbox_image_ids": [
+    "sha256:8ff3aa521320403b2415bbf207ffd4bda94a5fa7f89460af4394977e7bee30a3"
+  ],
+  "schema_version": 1,
+  "session_id": "3b6792da363e",
+  "source_files": [
+    {
+      "bytes": 76760,
+      "file": "6b8d05c853eb.jsonl",
+      "lines": 37,
+      "run_id": "6b8d05c853eb",
+      "sha256": "ae01d63b437fb82bd7739cf43a76925ad241e61a68747d9e7d0ea2cb195e6e20"
+    },
+    {
+      "bytes": 368023,
+      "file": "4fd790278ced.jsonl",
+      "lines": 86,
+      "run_id": "4fd790278ced",
+      "sha256": "e06d7b41764b8e34171a48a3caca5d51114e65f58c23ac3b3aed6f72a2b69508"
+    },
+    {
+      "bytes": 345816,
+      "file": "580d508120ef.jsonl",
+      "lines": 51,
+      "run_id": "580d508120ef",
+      "sha256": "10130b60f9e5c73ab610750a5a7af7239951996fc61db81c02c226686c36c472"
+    },
+    {
+      "bytes": 1153204,
+      "file": "2fdbe673cb88.jsonl",
+      "lines": 98,
+      "run_id": "2fdbe673cb88",
+      "sha256": "0adb1118b368427931a8fa2f64fa26c50ed829ef28a9057264e4de7109aefd7f"
+    },
+    {
+      "bytes": 4180311,
+      "file": "c50dafb5b94e.jsonl",
+      "lines": 156,
+      "run_id": "c50dafb5b94e",
+      "sha256": "2b14d5938fe9b683c211eda52465b4e92c11df6119bacf6614fbe861e5db2870"
+    },
+    {
+      "bytes": 5979570,
+      "file": "ed280f843333.jsonl",
+      "lines": 139,
+      "run_id": "ed280f843333",
+      "sha256": "194bebb41cd1b67a2e1658e53ab9927f6e666e85146c427ff7c51ad47edc42a5"
+    }
+  ],
+  "trace": {
+    "bytes": 363189,
+    "file": "trace.jsonl",
+    "lines": 567,
+    "sha256": "c25b40801b38eef40257404c57815bde997b9b318232e3c976d86f38d24f2572"
+  }
+}

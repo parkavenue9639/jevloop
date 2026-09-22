@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="480" viewBox="0 0 1400 480" role="img" aria-labelledby="title desc">
+  <title id="title">JevLoop — Faster agents. Fewer LLM calls.</title>
+  <desc id="desc">A warm editorial banner matching the JevLoop interface. A clay fast path routes Jev decisions directly to guarded execution, while language tasks pass through an LLM before returning to the same runtime and append-only ledger.</desc>
+
+  <defs>
+    <marker id="arrow-clay" markerWidth="11" markerHeight="11" refX="10" refY="5.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0 0L11 5.5L0 11Z" fill="#C96442"/>
+    </marker>
+    <marker id="arrow-ink" markerWidth="11" markerHeight="11" refX="10" refY="5.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0 0L11 5.5L0 11Z" fill="#141413"/>
+    </marker>
+    <marker id="arrow-muted" markerWidth="11" markerHeight="11" refX="10" refY="5.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0 0L11 5.5L0 11Z" fill="#8D887F"/>
+    </marker>
+  </defs>
+
+  <!-- warm paper / hairline frame -->
+  <rect x="1" y="1" width="1398" height="478" rx="4" fill="#FAF9F6" stroke="#E3DFD3" stroke-width="2"/>
+  <path d="M750 36V444" stroke="#E3DFD3" stroke-width="1.5"/>
+  <path d="M36 36H1364M36 444H1364" stroke="#E3DFD3" stroke-width="1"/>
+
+  <!-- registration marks: research-journal character -->
+  <g stroke="#C96442" stroke-width="2">
+    <path d="M36 48V36H48"/>
+    <path d="M1352 36H1364V48"/>
+    <path d="M36 432V444H48"/>
+    <path d="M1352 444H1364V432"/>
+  </g>
+
+  <!-- editorial wordmark -->
+  <g transform="translate(62 60)">
+    <g transform="translate(0 0)">
+      <circle cx="18" cy="18" r="16" fill="none" stroke="#141413" stroke-width="2"/>
+      <path d="M9 18A9 9 0 1 1 17 27H12" fill="none" stroke="#C96442" stroke-width="3" stroke-linecap="square"/>
+      <path d="M12 22L7 27L12 32" fill="none" stroke="#C96442" stroke-width="3" stroke-linecap="square" stroke-linejoin="miter" transform="translate(0 -5)"/>
+      <circle cx="18" cy="18" r="2.5" fill="#141413"/>
+    </g>
+    <text x="50" y="23" fill="#6E6B64" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" font-weight="700" letter-spacing="2.2">JEV-DRIVEN AGENT RUNTIME</text>
+    <text x="610" y="23" text-anchor="end" fill="#8D887F" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" letter-spacing="1.5">SYSTEM / 001</text>
+
+    <text x="0" y="139" fill="#141413" font-family="Anthropic Sans, ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="88" font-weight="720" letter-spacing="-5">Jev</text>
+    <text x="137" y="139" fill="#C96442" font-family="Copernicus, Tiempos Text, Iowan Old Style, Palatino, Georgia, serif" font-size="91" font-style="italic" font-weight="600" letter-spacing="-6">Loop</text>
+
+    <text x="2" y="218" fill="#141413" font-family="Copernicus, Tiempos Text, Iowan Old Style, Palatino, Georgia, serif" font-size="38" font-style="italic" letter-spacing="-1">Faster agents. Fewer LLM calls.</text>
+    <path d="M2 234H476" stroke="#C96442" stroke-width="4"/>
+
+    <text x="2" y="283" fill="#6E6B64" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" letter-spacing="0.5">JEV DECIDES  /  LLM AUTHORS  /  RUNTIME EXECUTES</text>
+
+    <g transform="translate(2 329)" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="700" letter-spacing="0.7">
+      <path d="M0 0H142V34H0Z" fill="#F0EEE5" stroke="#E3DFD3"/>
+      <path d="M0 0H5V34H0Z" fill="#C96442"/>
+      <text x="18" y="21" fill="#141413">TYPED FAST PATH</text>
+
+      <path d="M154 0H298V34H154Z" fill="#FAF9F6" stroke="#E3DFD3"/>
+      <text x="172" y="21" fill="#6E6B64">LANGUAGE ONLY</text>
+
+      <path d="M310 0H438V34H310Z" fill="#FAF9F6" stroke="#E3DFD3"/>
+      <text x="328" y="21" fill="#6E6B64">ONE LEDGER</text>
+    </g>
+  </g>
+
+  <!-- runtime trace, styled like the product's comparison panels -->
+  <g transform="translate(786 60)">
+    <text x="0" y="16" fill="#141413" font-family="Anthropic Sans, ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="15" font-weight="700">Routing trace</text>
+    <text x="514" y="16" text-anchor="end" fill="#6E6B64" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12">ONE STEP / TWO PATHS</text>
+    <path d="M0 34H514" stroke="#E3DFD3" stroke-width="1.5"/>
+
+    <g font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace">
+      <!-- state -->
+      <path d="M0 91H102V145H0Z" fill="#F0EEE5" stroke="#D5D0C4" stroke-width="1.5"/>
+      <text x="14" y="111" fill="#8D887F" font-size="10" letter-spacing="1.3">STATE</text>
+      <text x="14" y="133" fill="#141413" font-size="15" font-weight="800">OBSERVE</text>
+
+      <!-- Jev decision -->
+      <path d="M151 76H268V160H151Z" fill="#141413"/>
+      <path d="M151 76H268V81H151Z" fill="#C96442"/>
+      <text x="209.5" y="104" text-anchor="middle" fill="#BDB8AF" font-size="10" letter-spacing="1.5">DECIDE</text>
+      <text x="209.5" y="132" text-anchor="middle" fill="#FAF9F6" font-size="20" font-weight="800">JEV</text>
+      <text x="209.5" y="149" text-anchor="middle" fill="#D7D2C9" font-size="9">typed choice</text>
+
+      <!-- guarded execution -->
+      <path d="M370 91H514V145H370Z" fill="#FAF9F6" stroke="#C96442" stroke-width="2"/>
+      <text x="384" y="111" fill="#A65338" font-size="10" letter-spacing="1.1">GUARDED</text>
+      <text x="384" y="133" fill="#141413" font-size="15" font-weight="800">EXECUTE</text>
+
+      <!-- authoring branch -->
+      <path d="M151 235H275V293H151Z" fill="#F0EEE5" stroke="#BDB8AF" stroke-width="1.5"/>
+      <text x="165" y="256" fill="#8D887F" font-size="10" letter-spacing="1">WHEN NEEDED</text>
+      <text x="165" y="279" fill="#141413" font-size="14" font-weight="800">LLM AUTHORS</text>
+
+      <!-- ledger -->
+      <path d="M370 235H514V293H370Z" fill="#F0EEE5" stroke="#BDB8AF" stroke-width="1.5"/>
+      <text x="384" y="256" fill="#8D887F" font-size="10" letter-spacing="1">APPEND-ONLY</text>
+      <text x="384" y="279" fill="#141413" font-size="14" font-weight="800">LEDGER</text>
+    </g>
+
+    <!-- direct path -->
+    <path d="M102 118H148" fill="none" stroke="#141413" stroke-width="2.5" marker-end="url(#arrow-ink)"/>
+    <path d="M268 118H365" fill="none" stroke="#C96442" stroke-width="5" marker-end="url(#arrow-clay)"/>
+    <text x="316" y="98" text-anchor="middle" fill="#C96442" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" font-weight="800" letter-spacing="1.2">FAST PATH</text>
+
+    <!-- authored-content branch: differentiated by rhythm, not another brand color -->
+    <path d="M209 160V232" fill="none" stroke="#8D887F" stroke-width="2.5" stroke-dasharray="5 5" marker-end="url(#arrow-muted)"/>
+    <path d="M275 264H367" fill="none" stroke="#8D887F" stroke-width="2.5" stroke-dasharray="5 5" marker-end="url(#arrow-muted)"/>
+    <text x="304" y="251" fill="#8D887F" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="9" letter-spacing="1">LANGUAGE</text>
+
+    <!-- common runtime and loop -->
+    <path d="M442 145V232" fill="none" stroke="#141413" stroke-width="2.5" marker-end="url(#arrow-ink)"/>
+    <path d="M370 283C329 331 93 331 51 148" fill="none" stroke="#BDB8AF" stroke-width="2" stroke-dasharray="4 6" marker-end="url(#arrow-muted)"/>
+
+    <path d="M0 330H514" stroke="#E3DFD3"/>
+    <text x="0" y="353" fill="#6E6B64" font-family="JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" letter-spacing="0.7">CALIBRATED CHOICES IN / VERIFIED EFFECTS OUT</text>
+  </g>
+</svg>

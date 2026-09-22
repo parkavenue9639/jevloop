@@ -1,0 +1,56 @@
+{
+  "suite": "fastapi-case-v1",
+  "description": "Extracted verbatim from a real dashboard session (6 turns, single-lane): build and evolve a FastAPI service in the sandbox — inventory, create the app, verify, run the server, add a query endpoint, add data and re-verify. Exercises WRITE_FILE authoring, BASH programmatic verification and full service lifecycle; the server turns are checked with bash effect probes (any HTTP response on common ports proves the service is up) because the effect is a running process, not just files. Used to A/B the Noul ambiguity gate and progress-score floor against confidence-only escalation.",
+  "scenarios": [
+    {
+      "id": "fastapi-demo",
+      "category": "procedural_build",
+      "favor": "jev",
+      "description": "Real workspace case: each turn continues the same sandbox, files and running services persist across turns; later turns restart the server after editing app code.",
+      "max_steps": 14,
+      "turns": [
+        {
+          "goal": "当前工作区有哪些文件",
+          "answer_contains": [".gitkeep"],
+          "answer_max_chars": 200
+        },
+        {
+          "goal": "创建一个 FastAPI demo，提供 hello world 接口",
+          "any_file_contains": ["FastAPI"],
+          "min_files": 2
+        },
+        {
+          "goal": "当前工作区有哪些文件",
+          "answer_contains_any": ["app.py", "main.py", ".py"],
+          "answer_max_chars": 200
+        },
+        {
+          "goal": "启动服务并确认 hello world 接口可访问",
+          "bash": [
+            {
+              "command": "for p in $(seq 8000 8010) 8080 5000 3000; do b=$(curl -fsS -m 2 127.0.0.1:$p/ 2>/dev/null || true); if printf '%s' \"$b\" | grep -qi 'hello'; then echo UP:$p:$b; break; fi; done",
+              "contains": "UP:"
+            }
+          ],
+          "answer_contains_any": ["200", "hello", "Hello", "可访问", "成功"]
+        },
+        {
+          "goal": "增加一个简单的查询接口，返回内存中的测试数据",
+          "any_file_contains": ["items"],
+          "soft": ["items"],
+          "answer_contains_any": ["接口", "查询"]
+        },
+        {
+          "goal": "新增一条测试数据，再单独请求测试查询接口",
+          "answer_contains": ["4"],
+          "bash": [
+            {
+              "command": "for p in $(seq 8000 8010) 8080 5000 3000; do b=$(curl -fsS -m 2 127.0.0.1:$p/items 2>/dev/null || true); if printf '%s' \"$b\" | grep -q '4'; then echo DATA4:$p:$b; break; fi; done",
+              "contains": "DATA4:"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

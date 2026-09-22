@@ -1,0 +1,25 @@
+# python (backend)
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+artifacts/
+
+# local agent metadata
+**/.claude/
+
+# env & secrets
+.env
+.env.*
+
+# node (web)
+node_modules/
+
+# build output
+frontend/dist/
+backend/dist/
+
+# misc
+.DS_Store

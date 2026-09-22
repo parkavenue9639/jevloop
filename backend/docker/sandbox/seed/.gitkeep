@@ -1,0 +1,2 @@
+# Seeded empty by default: experiments that need pre-placed files pass an
+# explicit seed root to DockerSandboxImage.build().

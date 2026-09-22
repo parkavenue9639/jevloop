@@ -1,0 +1,69 @@
+{
+  "suite": "procurement-10turn-v1",
+  "description": "Ten-turn incremental SaaS procurement review with deterministic per-turn file injection.",
+  "scenarios": [
+    {
+      "id": "procurement-10turn",
+      "category": "long_horizon_read_synthesis",
+      "favor": "jev",
+      "max_steps": 20,
+      "turns": [
+        {
+          "goal": "We are selecting a SaaS vendor for our European business. Review the available material and give a concise recommendation: say whether each vendor meets the hard requirements and recommend the final choice.",
+          "inject_files": [
+            {"name": "procurement-policy.md", "content": "# SaaS procurement policy\n\nHard requirements:\n- Annual fee must not exceed $120,000.\n- SLA must be at least 99.90%.\n- Data residency must be EU.\n- Termination notice must not exceed 30 days.\n- SOC 2 Type II report must be no older than 12 months.\n\nIf multiple vendors pass every requirement, choose the lowest annual fee.\n"},
+            {"name": "vendor-atlas.md", "content": "# Atlas Cloud\n\n- Annual fee: $108,000\n- SLA: 99.95%\n- Data residency: EU\n- Termination notice: 60 days\n- SOC 2 Type II report age: 5 months\n"},
+            {"name": "vendor-boreal.md", "content": "# Boreal Systems\n\n- Annual fee: $116,000\n- SLA: 99.99%\n- Data residency: EU\n- Termination notice: 30 days\n- SOC 2 Type II report age: 6 months\n"},
+            {"name": "vendor-cedar.md", "content": "# Cedar Stack\n\n- Annual fee: $92,000\n- SLA: 99.90%\n- Data residency: US only\n- Termination notice: 15 days\n- SOC 2 Type II report age: 4 months\n"}
+          ],
+          "answer_contains_any": ["Boreal", "Boreal Systems"]
+        },
+        {
+          "goal": "The compliance team has added new information. Reassess the previous recommendation and explain whether the conclusion changes.",
+          "inject_files": [{"name": "update-02-compliance.md", "content": "# Compliance correction\n\n- Boreal Systems SOC 2 report is 14 months old, not 6 months old.\n- Atlas Cloud signed an amendment reducing termination notice from 60 days to 30 days.\n- All other facts remain unchanged.\n"}],
+          "answer_contains_any": ["Atlas", "Atlas Cloud"]
+        },
+        {
+          "goal": "Finance has updated the pricing and audit material. Update the procurement recommendation.",
+          "inject_files": [{"name": "update-03-finance.md", "content": "# Finance update\n\n- Atlas Cloud revised its annual fee from $108,000 to $125,000.\n- Boreal Systems supplied a renewed SOC 2 Type II report that is 1 month old.\n- All other facts remain unchanged.\n"}],
+          "answer_contains_any": ["Boreal", "Boreal Systems"]
+        },
+        {
+          "goal": "Legal and commercial teams have submitted revised terms. Reassess the current recommendation.",
+          "inject_files": [{"name": "update-04-legal.md", "content": "# Legal and commercial update\n\n- Boreal Systems changed termination notice from 30 days to 45 days.\n- Atlas Cloud offered a revised annual fee of $118,000.\n- All other facts remain unchanged.\n"}],
+          "answer_contains_any": ["Atlas", "Atlas Cloud"]
+        },
+        {
+          "goal": "There are new changes to data residency and contract terms. Update the conclusion and explain the deciding facts.",
+          "inject_files": [{"name": "update-05-residency.md", "content": "# Residency and contract update\n\n- Atlas Cloud will provide US-only data residency for this contract.\n- Boreal Systems accepted a 30-day termination notice.\n- All other facts remain unchanged.\n"}],
+          "answer_contains_any": ["Boreal", "Boreal Systems"]
+        },
+        {
+          "goal": "The operations review added current SLA and regional capability information. Reassess the three vendors.",
+          "inject_files": [{"name": "update-06-operations.md", "content": "# Operations review\n\n- Boreal Systems audited SLA is 99.85%.\n- Cedar Stack added EU data residency at an annual fee of $105,000.\n- Cedar Stack keeps its 15-day notice and 4-month-old SOC 2 report.\n- All other facts remain unchanged.\n"}],
+          "answer_contains_any": ["Cedar", "Cedar Stack"]
+        },
+        {
+          "goal": "Security and regional teams corrected two records. Update the procurement recommendation.",
+          "inject_files": [{"name": "update-07-security.md", "content": "# Security and region update\n\n- Cedar Stack SOC 2 report is 13 months old, not 4 months old.\n- Atlas Cloud restored EU data residency for this contract.\n- Atlas Cloud annual fee remains $118,000 and notice remains 30 days.\n- All other facts remain unchanged.\n"}],
+          "answer_contains_any": ["Atlas", "Atlas Cloud"]
+        },
+        {
+          "goal": "Commercial and SLA teams submitted a revised proposal. Reassess the best current vendor.",
+          "inject_files": [{"name": "update-08-commercial.md", "content": "# Commercial and SLA update\n\n- Boreal Systems offered an annual fee of $100,000.\n- Boreal Systems completed SLA remediation; audited SLA is now 99.95%.\n- Its EU residency, 30-day notice, and 1-month-old SOC 2 report remain unchanged.\n"}],
+          "answer_contains_any": ["Boreal", "Boreal Systems"]
+        },
+        {
+          "goal": "The final legal review is complete. Update the recommendation and explain why the other vendors are excluded.",
+          "inject_files": [{"name": "update-09-legal.md", "content": "# Final legal review\n\n- Boreal Systems reverted to a 60-day termination notice.\n- Cedar Stack supplied a renewed SOC 2 report that is 2 months old.\n- Cedar Stack EU residency and $105,000 annual fee remain unchanged.\n"}],
+          "answer_contains_any": ["Cedar", "Cedar Stack"]
+        },
+        {
+          "goal": "We received the best and final offers. Give the final recommendation, annual fee, and the most important compliance basis.",
+          "inject_files": [{"name": "update-10-final-offer.md", "content": "# Best and final offer\n\n- Atlas Cloud submitted a final annual fee of $98,000.\n- Atlas Cloud keeps EU residency, 99.95% SLA, 30-day notice, and 5-month-old SOC 2 report.\n- All other facts remain unchanged.\n"}],
+          "answer_contains": ["Atlas", "$98,000"]
+        }
+      ]
+    }
+  ]
+}
