@@ -8,7 +8,9 @@ Status: implementation contract, 2026-09-22. Branch:
 Refactor the shared agent runtime so Jev chooses operations and may select
 arguments grounded in previous tool observations, while every available tool
 always permits LLM-authored parameters. Implement and validate both drivers,
-then run the unchanged `backend/benchmarks/procurement_10turn.json` paired suite.
+then rerun the prior FastAPI baseline specified by the user. The initial
+interpretation as `procurement_10turn.json` was incorrect; its two runs are
+retained as supplemental evidence, not completion of the requested baseline.
 Do not publish, merge, alter benchmark expectations, or mutate external Lark data.
 
 ## Non-negotiable invariants
@@ -78,11 +80,13 @@ only explicitly supported truthful result projections may yield references.
 - Runtime tests: complete argument fingerprints and ledger calls, exact accounting
   of authoring/arbitration, recovery/UNKNOWN behavior, existing suites and Docker
   smoke. Keep source changes and baseline data separate.
-- Run the existing 10-turn procurement suite unchanged on both Jev and plain LLM.
+- Rerun the exact six-turn README FastAPI session on both Jev and plain LLM,
+  preserving original goals, thresholds, budgets and parallel dashboard scheduling.
   Record source identity, suite hash, model configuration, per-turn success,
   steps, direct/authoring/arbitration calls, elapsed time, tokens and cost.
-  This suite's answer-keyword checks are limited evidence, not proof of complete
-  recommendation correctness. Do not claim universal gains from one paired run.
+  The historical README reports answered turns, not independent semantic grading.
+  Supplemental procurement keyword checks do not replace this FastAPI replay.
+  Do not claim universal gains from one paired run.
 
 ## Progress / handoff
 
@@ -110,7 +114,8 @@ reproduced result or an official security guarantee.
 - [x] Observation and argument contracts implemented.
 - [x] Compiler, both drivers, materializer, providers and replay integrated.
 - [x] Offline tests and sandbox validation complete.
-- [ ] Unchanged 10-turn paired run complete and analyzed.
+- [x] Requested README FastAPI six-turn replay complete and analyzed.
+- [x] Supplemental procurement 10-turn runs retained and analyzed.
 
 Record consequential deviations and actual test/run receipts below; do not
 silently relax the invariants to improve benchmark results.
@@ -162,3 +167,48 @@ The implementation must route canonical ANSWER through the same locked-operation
 schema helper. Legacy injected target/text drivers may keep their old adapter.
 After this integration correction, rerun the whole unchanged paired suite in a
 separate artifact directory; do not change routing thresholds or scoring.
+
+### Final acceptance evidence
+
+Implementation commit: `79ba34b`; executable runtime digest: `a6e1c6ec8d2e`.
+Final offline validation: **264 passed**, Ruff passed, frontend TypeScript check
+passed. Independent review verified canonical ANSWER call/result pairing and
+single billing on success/refusal/truncation, binding locks and normalizer gates.
+
+The corrected full run finished with Jev **9/10** and plain LLM **10/10**.
+Jev: 40 attempts, 399.988 seconds, estimated $0.094744; plain: 40 attempts,
+86.126 seconds, $0.103030. One successful observed four-file read bypassed LLM
+authoring. Four transport-failed attempts must not be counted as successful
+direct execution. Turn 10 answered from stale historical evidence without
+reading the new offer. Thus the implementation and supplemental validation are complete,
+but the design has not demonstrated performance or quality parity on that
+supplemental suite; do not
+merge based on an asserted speedup. See [evaluation](observation-view-evaluation.md)
+for both supplemental runs, error accounting and the next freshness/coverage
+design question.
+
+### Confirmed requested baseline: README FastAPI session
+
+The user confirmed the README's six-turn version. This is **not** the different
+six-turn `backend/benchmarks/fastapi_case.json` suite. The exact source is session
+`3b6792da363e`, documented in `docs/evidence/fastapi-6turn-20260922/manifest.json`.
+All six local source event logs passed the manifest SHA256 checks. The replay
+script reads only whitelisted run parameters and runs the original dashboard
+execution path with fresh lane volumes/ledgers and parallel lane scheduling.
+It preserves max_steps=0, max_writes=0, the 0.5/0.4 routing thresholds and the
+disabled progress gate. A 600-second per-turn external watchdog bounds the run;
+the model/runtime policy is unchanged. The updated sandbox image is expected
+because tool implementation is the variable under evaluation.
+
+Replay entry point: `backend/scripts/replay_readme_fastapi.py`.
+Raw new run logs and reports stay local under
+`backend/artifacts/bench/readme-fastapi-observations-20260922/`.
+
+Both lanes completed and answered 6/6 turns. Jev: 27 steps, 179.644 seconds,
+estimated $0.066160; plain: 55 steps, 210.440 seconds, $0.195624. There were
+zero successful direct tool calls; 21 of 27 Jev attempts required arbitration.
+This sample shows a relative step/cost advantage over its plain lane, not proof
+of new direct-binding gains or improvement over the historical README Jev run.
+The completion-only scoring boundary and full results are documented in
+[README FastAPI replay](readme-fastapi-observation-replay.md). Final offline
+regression receipt including the replay harness: 268 tests passed, Ruff passed.
