@@ -31,9 +31,9 @@ def test_same_pool_gets_distinct_branch_heads():
     _questions, compiled = compile_questions(ws, mounted())
     inspect = compiled.target_heads[("INSPECT", "OPEN_CHAT")]
     verify = compiled.target_heads[("VERIFY", "OPEN_CHAT")]
-    reply = compiled.target_heads[("ACT", "REPLY_MESSAGE")]
-    assert len({inspect, verify, reply}) == 3
-    assert compiled.target_heads[("ACT", "SEND_MESSAGE")] != reply
+    assert inspect != verify
+    assert compiled.target_constants[("ACT", "REPLY_MESSAGE")] == "LLM_PARAMETERS"
+    assert compiled.target_constants[("ACT", "SEND_MESSAGE")] == "LLM_PARAMETERS"
 
 
 def test_target_criteria_carry_labels_without_cross_action_leaks():
@@ -41,14 +41,11 @@ def test_target_criteria_carry_labels_without_cross_action_leaks():
     ws.files["notes.md"] = "notes.md"
     questions, compiled = compile_questions(ws, mounted())
     read_head = compiled.target_heads[("INSPECT", "READ_FILE")]
-    write_head = compiled.target_heads[("ACT", "WRITE_FILE")]
     assert questions[read_head]["criteria"]["notes.md"]["file"] == "notes.md"
     assert '"limit": 200' in questions[read_head]["criteria"]["notes.md"]["arguments"]
     assert "LLM_PARAMETERS" in questions[read_head]["criteria"]
-    write_criteria = questions[write_head]["criteria"]
-    assert write_criteria["notes.md"]["file"] == "notes.md"
-    assert "LLM_PARAMETERS" in write_criteria
-    assert "NEW" not in write_criteria
+    write_criteria = compiled.target_candidates[("ACT", "WRITE_FILE")]
+    assert set(write_criteria) == {"LLM_PARAMETERS"}
 
 
 def test_target_filter_narrows_compatibility():

@@ -103,11 +103,10 @@ def _recovery_note_text(observation):
 
 
 def _scoped_tool_schemas(provider, jev_decision, valid_actions):
-    """Expose available operations with their open canonical parameter schema."""
+    """Stable catalog: current allowed actions are validated separately."""
     # The observed shortcut window is not the tool's complete argument space.
     # Runtime validation owns closed domain references and authorization.
-    return [schema for schema in tool_schemas(provider)
-            if schema["function"]["name"] in valid_actions]
+    return tool_schemas(provider)
 
 
 async def arbitrate(transcript, jev_decision, provider, valid_actions, post=None,
@@ -120,6 +119,7 @@ async def arbitrate(transcript, jev_decision, provider, valid_actions, post=None
     `recovery` (the latest recoverable observation) is given, the note cites its
     observation id, code, stage and effect instead of the confidence digest."""
     note = _recovery_note_text(recovery) if recovery else _note_text(jev_decision)
+    note += f" Currently permitted operations: {', '.join(sorted(valid_actions))}."
     import time
 
     started = time.perf_counter()

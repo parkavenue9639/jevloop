@@ -3,6 +3,11 @@
 Status: implementation contract, 2026-09-22. Branch:
 `feat/observation-view-bindings`, baseline `7836c03`.
 
+Update: [Stable LLM tool contract](llm-cache-contract.md) supersedes the
+partial-binding/remaining-parameter authoring design below. Historical run
+receipts remain unchanged; current candidates must be complete, or Jev selects
+LLM_PARAMETERS for unrestricted full-argument generation for the chosen tool.
+
 ## Objective and authority
 
 Refactor the shared agent runtime so Jev chooses operations and may select

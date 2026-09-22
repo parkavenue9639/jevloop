@@ -8,6 +8,7 @@ transcript; RuntimeKernel owns those state transitions for every lane.
 import json
 import os
 import time
+from copy import deepcopy
 from dataclasses import dataclass, field
 
 from .arguments import argument_target, argument_text, validate_arguments
@@ -20,7 +21,7 @@ from .escalation import arbitrate, latest_recoverable, should_escalate
 from .guardrails import InvalidProposal, MalformedAuthoredValue
 from .model import action_catalog, choose, compile_questions, post_json
 from .text_helper import _clean
-from .transcript import full_tool_schemas
+from .transcript import Transcript, llm_tool_schemas
 
 
 @dataclass(frozen=True)
@@ -175,6 +176,9 @@ class JevDriver:
                 jev_decision = {**jev_decision, "binding_mode": "llm_parameters",
                                 "bound_arguments": {}, "target": None,
                                 "confidence": operation_routing["confidence"]}
+                # A route change never inherits an executable argument payload.
+                jev_decision.pop("arguments", None)
+                jev_decision.pop("ledger_content", None)
             return DriverProposal(
                 decision=jev_decision,
                 base_decision=jev_decision,
@@ -242,6 +246,8 @@ class JevDriver:
             )
 
         decision = dict(jev_decision)
+        decision.pop("bound_arguments", None)
+        decision.pop("arguments", None)
         decision.update({
             "operation": action,
             "target": resolved,
@@ -328,14 +334,15 @@ class PlainLlmDriver:
     async def decide(self, context: DriverContext) -> DriverProposal:
         self.turn += 1
         valid_actions = action_catalog(context.workspace, context.provider)
-        schemas = [
-            schema for schema in full_tool_schemas(context.provider)
-            if schema["function"]["name"] in valid_actions
-        ]
+        schemas = llm_tool_schemas(context.provider)
+        note = (f"[operation request] Currently permitted operations: {', '.join(sorted(valid_actions))}. "
+                "Choose your best next permitted action; catalog visibility is not authorization.")
+        request_transcript = Transcript.from_messages(deepcopy(context.transcript.messages()))
+        request_transcript.append_note(note)
         if self._llm_call:
-            message, helper, request = await self._llm_call(context.transcript, schemas)
+            message, helper, request = await self._llm_call(request_transcript, schemas)
         else:
-            message, helper, request = await self._llm(context.transcript, schemas)
+            message, helper, request = await self._llm(request_transcript, schemas)
         helper = {
             **helper,
             "kind": helper.get("kind", "plain_decision"),
@@ -449,6 +456,7 @@ class PlainLlmDriver:
             request=request,
             assistant_message=assistant_message,
             helper_info=helper,
+            transcript_note=note,
             driver_meta={"returned_tool_calls": len(calls)},
             model_calls=[helper],
         )

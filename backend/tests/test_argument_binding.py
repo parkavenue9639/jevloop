@@ -25,7 +25,7 @@ from jevloop.projection import intent_fingerprint, rebuild_workspace
 from jevloop.state import Workspace
 from jevloop.tools.base import ToolSpec
 from jevloop.tools.sandbox import SandboxTools
-from jevloop.transcript import Transcript, full_tool_schemas
+from jevloop.transcript import Transcript, full_tool_schemas, llm_tool_schemas
 
 
 def spec(name):
@@ -43,7 +43,7 @@ def response(calls, finish_reason="tool_calls"):
             "usage": {"prompt_tokens": 31, "completion_tokens": 7}}
 
 
-def run_helper(payload, operation="READ_FILE", bound=None):
+def run_helper(payload, operation="READ_FILE"):
     ledger = Transcript("System", "inspect the project")
     before = deepcopy(ledger.dump())
     calls = []
@@ -53,7 +53,7 @@ def run_helper(payload, operation="READ_FILE", bound=None):
         return payload
 
     try:
-        result = asyncio.run(generate_arguments(ledger, spec(operation), operation, bound or {}, post=post))
+        result = asyncio.run(generate_arguments(ledger, SandboxTools(), operation, post=post))
     finally:
         # Authoring is not execution and must not create dangling tool calls.
         assert ledger.dump() == before
@@ -143,23 +143,23 @@ def test_candidate_projection_does_not_rank_or_parse_goal_text():
     assert a.state()["goal"] != b.state()["goal"]  # Models still see the actual request.
 
 
-def test_parameter_helper_is_one_call_locks_operation_and_bound_fields():
+def test_parameter_helper_is_one_call_locks_only_operation_with_full_catalog():
     bound = {"path": "src/observed.py"}
     payload = response([call("READ_FILE", {**bound, "offset": 10, "limit": 5})])
-    (args, helper), request = run_helper(payload, bound=bound)
+    (args, helper), request = run_helper(payload)
     assert args == {"path": "src/observed.py", "offset": 10, "limit": 5}
     assert helper["kind"] == "parameter_authoring"
     assert helper["usage"] == payload["usage"]
     assert request["parallel_tool_calls"] is False
     assert request["tool_choice"] == "required"
-    assert {tool["function"]["name"] for tool in request["tools"]} == {"READ_FILE", "CANNOT_BIND"}
-    assert request["tools"][0]["function"]["parameters"]["properties"]["path"]["const"] == bound["path"]
+    assert request["tools"] == llm_tool_schemas(SandboxTools())
+    assert "src/observed.py" not in request["messages"][-1]["content"]
+    assert "const" not in json.dumps(request["tools"])
     assert "const" not in parameter_schema(spec("READ_FILE"))["properties"]["path"]
 
 
 @pytest.mark.parametrize("payload", [
     response([call("BASH", {"command": "ls"})]),
-    response([call("READ_FILE", {"path": "other.py"})]),
     response([call("READ_FILE", {"offset": 0})]),
     response([call("READ_FILE", {"path": "src/observed.py"})], "length"),
     response([call("READ_FILE", {"path": "src/observed.py"}), call("READ_FILE", {"path": "other.py"}, "call2")]),
@@ -171,15 +171,15 @@ def test_parameter_helper_is_one_call_locks_operation_and_bound_fields():
 ])
 def test_invalid_parameter_response_is_pre_dispatch_with_billed_receipt(payload):
     with pytest.raises(InvalidProposal) as error:
-        run_helper(payload, bound={"path": "src/observed.py"})
+        run_helper(payload)
     assert error.value.helper_info["kind"] == "parameter_authoring"
     assert error.value.helper_info["usage"] == payload["usage"]
 
 
-def test_partial_write_authors_content_and_remaining_parameters_together():
+def test_write_authors_all_parameters_without_an_inherited_binding():
     (args, helper), _ = run_helper(response([call("WRITE_FILE", {
         "path": "src/new.py", "content": "print('ready')\n",
-    })]), operation="WRITE_FILE", bound={"path": "src/new.py"})
+    })]), operation="WRITE_FILE")
     assert validate_arguments(spec("WRITE_FILE"), args, Workspace()) == args
     assert helper["kind"] == "parameter_authoring"
 
@@ -251,8 +251,9 @@ def test_complete_direct_binding_materializes_without_any_authoring():
 def test_explicit_llm_parameters_is_honored_even_if_empty_args_match_schema():
     requests = []
 
-    async def arguer(_ledger, selected, operation, bound):
-        requests.append((selected.name, operation, deepcopy(bound)))
+    async def arguer(_ledger, provider, operation):
+        assert isinstance(provider, SandboxTools)
+        requests.append(operation)
         return {"path": "src", "offset": 100, "limit": 20}, {
             "kind": "parameter_authoring", "usage": {}, "latency_ms": 0, "model": "test"}
 
@@ -262,7 +263,7 @@ def test_explicit_llm_parameters_is_honored_even_if_empty_args_match_schema():
     assert arguments_complete(listing, {})
     decision = {"operation": "LIST_FILES", "binding_mode": "llm_parameters", "bound_arguments": {}}
     intent = asyncio.run(kernel._materialize_arguments(decision, listing))
-    assert requests == [("LIST_FILES", "LIST_FILES", {})]
+    assert requests == ["LIST_FILES"]
     assert intent["arguments"] == {"path": "src", "offset": 100, "limit": 20}
     assert not decision.get("arbitrated")
 
@@ -314,12 +315,12 @@ def test_normalized_native_call_and_frozen_dispatch_have_identical_arguments():
     assert rebuild_workspace(kernel.transcript).history[0]["target"] == "safe.py"
 
 
-def test_kernel_rejects_injected_author_changing_bound_arguments():
+def test_kernel_rejects_partial_direct_invocation_without_calling_author():
     async def invalid(*_args):
-        return {"path": "other.py", "content": "value"}, {"kind": "parameter_authoring"}
+        raise AssertionError("Partial direct invocations must never call the LLM")
 
     kernel = RuntimeKernel(None, SandboxTools(), WritePolicy(), arguer=invalid)
-    with pytest.raises(InvalidProposal, match="changed a bound argument"):
+    with pytest.raises(InvalidProposal, match="Direct invocation must have complete arguments"):
         asyncio.run(kernel._materialize_arguments(
             {"operation": "WRITE_FILE", "bound_arguments": {"path": "safe.py"}}, spec("WRITE_FILE")))
 
@@ -352,9 +353,9 @@ def test_canonical_answer_uses_locked_schema_not_legacy_freeform():
     async def forbidden(*_args, **_kwargs):
         raise AssertionError("canonical ANSWER must not use the legacy free-form helper")
 
-    async def arguer(_ledger, selected, operation, bound):
-        assert selected is None and operation == "ANSWER" and bound == {}
-        assert function_schema(selected, operation)["function"]["parameters"]["required"] == ["answer"]
+    async def arguer(_ledger, provider, operation):
+        assert isinstance(provider, SandboxTools) and operation == "ANSWER"
+        assert function_schema(None, operation)["function"]["parameters"]["required"] == ["answer"]
         return {"answer": "Grounded answer"}, {"kind": "authoring"}
 
     kernel = RuntimeKernel(None, SandboxTools(), WritePolicy(), arguer=arguer, texter=forbidden,

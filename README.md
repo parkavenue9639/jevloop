@@ -105,10 +105,12 @@ Only the transcript is persisted; workspace state is recoverable.
 
 Scoped listing, ranged reads and bounded search produce historical observation
 views with grounded references. Jev may bind a compatible reference and declared
-defaults directly, or choose `LLM_PARAMETERS` for the same operation. Partial
-bindings stay locked while the LLM fills missing fields. No user-text matching
+defaults as a complete invocation, or choose `LLM_PARAMETERS` for the same
+operation. The LLM generates all arguments from context, with no inherited
+partial bindings. Authoring, arbitration and plain LLM share a stable canonical
+tool catalog; dynamic candidates belong only to Jev. No user-text matching
 generates candidates; all paths share argument validation and execution policy.
-See the [implementation contract](docs/observation-view-contract.md).
+See the [cache and argument contract](docs/llm-cache-contract.md).
 
 ### One runtime for every driver
 

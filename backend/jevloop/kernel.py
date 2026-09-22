@@ -20,7 +20,6 @@ from .arguments import (
     argument_target,
     argument_text,
     arguments_complete,
-    parameter_schema,
     validate_arguments,
 )
 from .drivers import DriverContext
@@ -191,6 +190,7 @@ class RuntimeKernel:
             outcome = None
             stage = "decision"
             try:
+                allowed_operations = frozenset(self.provider.available(self.workspace))
                 try:
                     proposal = await self.driver.decide(DriverContext(
                         goal=goal,
@@ -229,6 +229,9 @@ class RuntimeKernel:
                     "request": proposal.request,
                     "model_calls": list(proposal.model_calls),
                 }
+                if (decision["operation"] not in CORE_ACTIONS
+                        and decision["operation"] not in allowed_operations):
+                    raise InvalidProposal("Selected operation was not available at request time.")
                 if proposal.escalation:
                     step["escalation"] = proposal.escalation
                 selected_spec = self._spec.get(decision["operation"])
@@ -237,10 +240,10 @@ class RuntimeKernel:
                      or decision["operation"] == "ANSWER")
                     and not decision.get("ledger_content")
                 )
-                if "bound_arguments" in decision:
+                if decision.get("binding_mode") == "llm_parameters" or "bound_arguments" in decision:
                     needs_authoring = (decision.get("binding_mode") == "llm_parameters"
                                        or not arguments_complete(selected_spec,
-                                           decision["bound_arguments"], decision["operation"]))
+                                           decision.get("bound_arguments", {}), decision["operation"]))
                 await self._emit({
                     "type": "decision_ready",
                     "attempt_id": attempt_id,
@@ -305,6 +308,9 @@ class RuntimeKernel:
                             },
                         }
                     else:
+                        if (intent["operation"] not in CORE_ACTIONS
+                                and intent["operation"] not in self.provider.available(self.workspace)):
+                            raise GuardrailDenied("Selected operation is no longer available.")
                         self._refuse_repeats(intent)
                         review(decision, self.policy, self.budget,
                                self.workspace.recipients)
@@ -753,7 +759,8 @@ class RuntimeKernel:
         operation = decision["operation"]
         target = decision.get("target")
         spec = self._spec.get(operation)
-        if "arguments" in decision or "bound_arguments" in decision:
+        if (decision.get("binding_mode") == "llm_parameters"
+                or "arguments" in decision or "bound_arguments" in decision):
             return await self._materialize_arguments(decision, spec)
         if isinstance(target, (list, tuple)):
             if (
@@ -811,20 +818,21 @@ class RuntimeKernel:
         supplied = "arguments" in decision
         args = deepcopy(decision.get("arguments", decision.get("bound_arguments", {})))
         bound = deepcopy(args)
-        force_parameters = (decision.get("binding_mode") == "llm_parameters"
-                            and bool(parameter_schema(spec, operation).get("properties")))
-        if not supplied and (force_parameters or not arguments_complete(spec, args, operation)):
-            args, helper = await self._arguments(self.transcript, spec, operation, args)
+        force_parameters = decision.get("binding_mode") == "llm_parameters"
+        if force_parameters and (supplied or args or decision.get("target") is not None
+                                 or decision.get("ledger_content") is not None):
+            raise InvalidProposal("LLM_PARAMETERS cannot carry partial or bound arguments.")
+        if not supplied and force_parameters:
+            args, helper = await self._arguments(self.transcript, self.provider, operation)
+        elif not supplied and not arguments_complete(spec, args, operation):
+            raise InvalidProposal("Direct invocation must have complete arguments; select LLM_PARAMETERS instead.")
         try:
-            if not supplied and any(key not in args or args[key] != value
-                                    for key, value in bound.items()):
-                raise InvalidProposal("Parameter helper changed a bound argument.")
             args = validate_arguments(spec, args, self.workspace, operation)
             if supplied and args != bound:
                 raise InvalidProposal("Revalidation changed already committed arguments; normalizers must be idempotent.")
             if not supplied and any(key not in args or args[key] != value
                                     for key, value in bound.items()):
-                raise InvalidProposal("Argument normalization changed a bound argument.")
+                raise InvalidProposal("Argument normalization changed a selected invocation argument.")
             target = argument_target(spec, args)
             text = argument_text(spec, args, operation)
             self._reject_operation_echo(operation, text)

@@ -9,7 +9,8 @@ from dataclasses import dataclass
 
 import httpx
 
-from .arguments import LLM_PARAMETERS, arguments_complete, bound_arguments
+from .arguments import LLM_PARAMETERS, bound_arguments, validate_arguments
+from .guardrails import InvalidProposal, MalformedAuthoredValue
 from .questions import (
     ACTION_PREAMBLE,
     CORE_ACTIONS,
@@ -129,6 +130,32 @@ def _criterion_description(description):
     return description.strip()
 
 
+def _complete_candidate(spec, arguments, workspace):
+    """Only canonical, executable argument shapes enter the shortcut window."""
+    try:
+        return validate_arguments(spec, arguments, workspace)
+    except (InvalidProposal, MalformedAuthoredValue):
+        return None
+
+
+def _selected_arguments(spec, candidates, target, workspace):
+    """Use exactly the displayed invocation, or a compatible bounded batch."""
+    if not isinstance(target, tuple):
+        return json.loads(candidates[target]["arguments"])
+    field = spec.target_parameter
+    args = [json.loads(candidates[key]["arguments"]) for key in target]
+    shared = [{key: value for key, value in item.items() if key != field} for item in args]
+    if any(item != shared[0] for item in shared) or any(
+            not isinstance(item.get(field), str) for item in args):
+        raise InvalidProposal("Batch invocation candidates have incompatible arguments.")
+    merged = {**shared[0], "targets" if spec.parameters is None else field:
+              [item[field] for item in args]}
+    validated = validate_arguments(spec, merged, workspace)
+    if validated != merged:
+        raise InvalidProposal("Batch normalization changed the selected invocation.")
+    return validated
+
+
 def _target_criteria(workspace, spec):
     from .state import POOL_VOCAB
 
@@ -152,22 +179,27 @@ def _target_criteria(workspace, spec):
                 " [read this turn; coverage may be partial or evicted; "
                 "check available range and freshness before reusing evidence]"
             )
-        if key not in {LLM_PARAMETERS, "DEFAULT_ARGUMENTS"}:
+        args = _complete_candidate(spec, bound_arguments(spec, key), workspace)
+        if key not in {LLM_PARAMETERS, "DEFAULT_ARGUMENTS"} and args is not None:
             criteria[key] = {vocab: label[:300], "arguments": json.dumps(
-                bound_arguments(spec, key), ensure_ascii=False, sort_keys=True)}
+                args, ensure_ascii=False, sort_keys=True)}
     for extra_key, description in spec.target_extra:
-        if extra_key in criteria:
+        if extra_key in entries or extra_key in criteria or extra_key in {LLM_PARAMETERS, "DEFAULT_ARGUMENTS"}:
             raise ValueError(
                 f"Synthetic target {extra_key!r} collides with a real candidate.")
-        criteria[extra_key] = {vocab: description}
+        args = _complete_candidate(spec, bound_arguments(spec, extra_key), workspace)
+        if args is not None:
+            criteria[extra_key] = {vocab: description, "arguments": json.dumps(
+                args, ensure_ascii=False, sort_keys=True)}
     criteria[LLM_PARAMETERS] = {
         "binding": "Let the LLM determine the parameters for this operation from context. "
         "Choose this when no offered binding fits; the observation window is not exhaustive."
     }
-    if arguments_complete(spec, spec.binding_defaults or {}):
+    defaults = _complete_candidate(spec, spec.binding_defaults or {}, workspace)
+    if defaults is not None:
         criteria["DEFAULT_ARGUMENTS"] = {
             "binding": "Use the tool's declared safe default arguments.",
-            "arguments": json.dumps(spec.binding_defaults or {}, ensure_ascii=False, sort_keys=True)}
+            "arguments": json.dumps(defaults, ensure_ascii=False, sort_keys=True)}
     return criteria
 
 
@@ -184,10 +216,11 @@ def compile_questions(workspace, provider):
         else:
             criteria = {LLM_PARAMETERS: {
                 "binding": "Let the LLM fill all parameters for this operation from context."}}
-            if arguments_complete(spec, spec.binding_defaults or {}):
+            defaults = _complete_candidate(spec, spec.binding_defaults or {}, workspace)
+            if defaults is not None:
                 criteria["DEFAULT_ARGUMENTS"] = {
                     "binding": "Use the tool's declared safe default arguments.",
-                    "arguments": json.dumps(spec.binding_defaults or {}, ensure_ascii=False, sort_keys=True)}
+                    "arguments": json.dumps(defaults, ensure_ascii=False, sort_keys=True)}
             targets[spec.name] = criteria
         feasible_specs.append(spec)
     spec_by_name = {spec.name: spec for spec in feasible_specs}
@@ -258,7 +291,7 @@ def compile_questions(workspace, provider):
             }
             spec = spec_by_name.get(operation)
             concrete = {key: value for key, value in targets[operation].items()
-                        if key != LLM_PARAMETERS}
+                        if key not in {LLM_PARAMETERS, "DEFAULT_ARGUMENTS"}}
             if (
                 spec is not None and spec.multi_target_max > 1
                 and 2 <= len(concrete) <= MULTI_TARGET_CANDIDATE_CAP
@@ -537,10 +570,11 @@ async def choose(workspace, _goal, _history, provider=None):
     if target == "DEFAULT_ARGUMENTS":
         binding_mode = "defaults"
     spec = next((item for item in provider.specs() if item.name == operation), None)
-    bound = (bound_arguments(spec, None if binding_mode != "observed" else target)
-             if spec else {})
-    if binding_mode == "llm_parameters":
-        bound = {}
+    try:
+        bound = ({} if binding_mode == "llm_parameters" else
+                 _selected_arguments(spec, compiled.target_candidates[branch], target, workspace))
+    except (InvalidProposal, KeyError, ValueError) as error:
+        raise _billed_invalid(InvalidModelResponse(str(error)), body, result, started) from error
     if binding_mode != "observed":
         target = None
     decision = {

@@ -1,13 +1,16 @@
 """Deterministic end-to-end smoke for the kernel and Docker sandbox."""
 
 import asyncio
+import json
 
+from .argument_helper import generate_arguments
 from .drivers import DriverProposal
 from .guardrails import WritePolicy
 from .kernel import RuntimeKernel
 from .state import Workspace
 from .tools.base import ToolContext
 from .tools.sandbox import DockerSandboxContainer, DockerSandboxImage, SandboxTools
+from .transcript import llm_tool_schemas
 
 
 class SmokeDriver:
@@ -141,6 +144,7 @@ async def run_smoke():
             for note in kernel.workspace.notes
         )
         canonical_checks = await check_canonical_tools(container)
+        argument_checks = await check_argument_routes(container)
         return {
             "ok": True,
             "image_id": image.image_id,
@@ -150,11 +154,58 @@ async def run_smoke():
             "events": event_types,
             "checkpoints": len(checkpoints),
             "canonical_checks": canonical_checks,
+            "argument_checks": argument_checks,
         }
     finally:
         if container is not None:
             await container.close()
         await image.close()
+
+
+async def check_argument_routes(container):
+    """Real kernel/provider execution with deterministic LLM transport receipts."""
+    provider = SandboxTools(container)
+    authored = []
+    path = "cache-contract/new.txt"
+
+    class Driver:
+        name = "jev"
+
+        def __init__(self):
+            self.index = 0
+
+        async def decide(self, _context):
+            decisions = [
+                {"operation": "WRITE_FILE", "binding_mode": "llm_parameters", "bound_arguments": {}},
+                {"operation": "READ_FILE", "binding_mode": "observed",
+                 "bound_arguments": {"path": path, "offset": 0, "limit": 200}},
+                {"operation": "ANSWER", "binding_mode": "llm_parameters", "bound_arguments": {}},
+            ]
+            decision = {**decisions[self.index], "confidence": 1.0}
+            self.index += 1
+            return DriverProposal(decision=decision, base_decision=decision)
+
+    async def author(ledger, tools, operation):
+        async def post(_url, _key, request):
+            assert request["tools"] == llm_tool_schemas(provider)
+            authored.append(operation)
+            arguments = ({"path": path, "content": "full-arguments-ok"}
+                         if operation == "WRITE_FILE" else {"answer": "cache-contract-ok"})
+            return {"choices": [{"finish_reason": "tool_calls", "message": {
+                "role": "assistant", "content": None, "tool_calls": [{
+                    "id": f"smoke-{len(authored)}", "type": "function", "function": {
+                        "name": operation, "arguments": json.dumps(arguments)}}]}}],
+                "usage": {"prompt_tokens": 0, "completion_tokens": 0}}
+        return await generate_arguments(ledger, tools, operation, post=post)
+
+    kernel = RuntimeKernel(Driver(), provider, WritePolicy(), arguer=author, max_steps=3)
+    steps = [step async for step in kernel.run("Write a file, read it, and answer.")]
+    assert steps[-1]["final"] == "completed"
+    assert await container.read_file(path) == "full-arguments-ok"
+    assert authored == ["WRITE_FILE", "ANSWER"]  # complete READ executes without an LLM
+    assert len(kernel.metrics.helper_calls) == 2
+    assert kernel.transcript.repair() == 0
+    return ["full_argument_generation", "complete_read_without_llm", "stable_authoring_schemas"]
 
 
 def main():

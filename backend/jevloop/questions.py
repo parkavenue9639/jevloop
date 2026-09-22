@@ -48,12 +48,12 @@ ACTION_PREAMBLE = (
 
 TARGET_PREAMBLE = (
     "Counterfactual: for {phase}/{operation}, choose an argument binding for this "
-    "already selected operation. Choose an offered binding when its exact bound "
-    "values fit the next step; complete bindings execute directly, while missing "
-    "required fields are authored by an LLM without changing bound values. "
+    "already selected operation. Every offered invocation has complete arguments; "
+    "choose it only when its exact values fit the next step, for direct execution. "
     "DEFAULT_ARGUMENTS means exactly its shown values, not a preferred fallback. "
     "Choose LLM_PARAMETERS if different values or contextual inference are needed; "
-    "it keeps the operation, not full arbitration. References are non-exhaustive "
+    "the LLM generates ALL arguments with no inherited binding. It keeps the "
+    "operation, not full arbitration. References are non-exhaustive "
     "historical evidence; check coverage and freshness rather than assuming a "
     "previous read provides all needed content. Include several only when each "
     "is independently needed and compatible with one bounded call."
