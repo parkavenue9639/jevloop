@@ -174,6 +174,8 @@ def main() -> None:
     assert len(records) == manifest["trace"]["lines"]
     violations = find_forbidden_keys(records)
     assert not violations, f"forbidden fields: {violations[:10]}"
+    long_strings = find_long_strings(records)
+    assert not long_strings, f"unredacted long strings: {long_strings[:10]}"
     assert summarize(records, manifest) == expected_summary
 
     if args.source_dir:
