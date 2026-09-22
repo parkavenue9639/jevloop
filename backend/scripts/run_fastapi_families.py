@@ -18,10 +18,10 @@ from collections import Counter, defaultdict
 from dataclasses import replace
 from pathlib import Path
 
-from jevloop import bench
-from jevloop.arguments import arguments_complete, validate_arguments
 from jevloop.cli import load_env_file
-from jevloop.guardrails import InvalidProposal
+from jevloop.contracts.arguments import arguments_complete, validate_arguments
+from jevloop.contracts.policy import InvalidProposal
+from jevloop.evaluation import bench
 from jevloop.tools.sandbox import SPECS, workspace_volume_name
 
 ROOT = Path(__file__).resolve().parents[1]

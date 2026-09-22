@@ -1,6 +1,6 @@
 """Model token and cost accounting remains separated by role."""
 
-from jevloop.metrics import RunMetrics
+from jevloop.runtime.metrics import RunMetrics
 
 
 def test_summary_separates_jev_and_llm_tokens_and_costs():

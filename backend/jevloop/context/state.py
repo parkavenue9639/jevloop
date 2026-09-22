@@ -8,7 +8,7 @@ layer never need to know what a "chat" is.
 from copy import deepcopy
 from dataclasses import dataclass, field
 
-from .observations import FILE_REF_CAP, reference_entries
+from jevloop.context.observations import FILE_REF_CAP, reference_entries
 
 
 @dataclass

@@ -15,15 +15,19 @@ import json
 import uuid
 from copy import deepcopy
 
-from .argument_helper import generate_arguments
-from .arguments import (
-    argument_target,
-    argument_text,
-    arguments_complete,
-    validate_arguments,
+from jevloop.context.projection import (
+    bounded_error,
+    fingerprint,
+    intent_fingerprint,
+    observation_fingerprint,
+    rebuild_workspace,
+    record_execution,
 )
-from .drivers import DriverContext
-from .guardrails import (
+from jevloop.context.state import Workspace
+from jevloop.context.transcript import Transcript, system_prompt
+from jevloop.contracts.arguments import argument_target, argument_text, arguments_complete, validate_arguments
+from jevloop.contracts.authored import _clean, validate_authored_value
+from jevloop.contracts.policy import (
     AttemptFailure,
     Budget,
     DuplicateNoProgress,
@@ -33,20 +37,12 @@ from .guardrails import (
     WritePolicy,
     review,
 )
-from .metrics import RunMetrics
-from .projection import (
-    bounded_error,
-    fingerprint,
-    intent_fingerprint,
-    observation_fingerprint,
-    rebuild_workspace,
-    record_execution,
-)
-from .questions import ANSWER_TEXT
-from .state import Workspace
-from .text_helper import _clean, generate_text, validate_authored_value
-from .tools.base import ToolContext, text_field_for, write_actions
-from .transcript import Transcript, system_prompt
+from jevloop.contracts.tools import ToolContext, text_field_for, write_actions
+from jevloop.decision.argument_helper import generate_arguments
+from jevloop.decision.drivers import DriverContext
+from jevloop.decision.questions import ANSWER_TEXT
+from jevloop.decision.text_helper import generate_text
+from jevloop.runtime.metrics import RunMetrics
 
 CORE_ACTIONS = {"ANSWER", "DONE", "BLOCKED"}
 NON_LEDGER_ACTIONS = {"BLOCKED"}  # no function schema exists to synthesize a call

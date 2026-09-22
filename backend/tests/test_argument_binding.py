@@ -6,9 +6,11 @@ from copy import deepcopy
 
 import pytest
 
-from jevloop import model
-from jevloop.argument_helper import generate_arguments
-from jevloop.arguments import (
+from jevloop.context.observations import normalize_observation
+from jevloop.context.projection import intent_fingerprint, rebuild_workspace
+from jevloop.context.state import Workspace
+from jevloop.context.transcript import Transcript
+from jevloop.contracts.arguments import (
     LLM_PARAMETERS,
     argument_target,
     arguments_complete,
@@ -17,15 +19,14 @@ from jevloop.arguments import (
     parameter_schema,
     validate_arguments,
 )
-from jevloop.drivers import JevDriver, PlainLlmDriver
-from jevloop.guardrails import GuardrailDenied, InvalidProposal, WritePolicy
-from jevloop.kernel import RuntimeKernel
-from jevloop.observations import normalize_observation
-from jevloop.projection import intent_fingerprint, rebuild_workspace
-from jevloop.state import Workspace
-from jevloop.tools.base import ToolSpec
+from jevloop.contracts.policy import GuardrailDenied, InvalidProposal, WritePolicy
+from jevloop.contracts.schemas import full_tool_schemas, llm_tool_schemas
+from jevloop.contracts.tools import ToolSpec
+from jevloop.decision import model
+from jevloop.decision.argument_helper import generate_arguments
+from jevloop.decision.drivers import JevDriver, PlainLlmDriver
+from jevloop.runtime.kernel import RuntimeKernel
 from jevloop.tools.sandbox import SandboxTools
-from jevloop.transcript import Transcript, full_tool_schemas, llm_tool_schemas
 
 
 def spec(name):

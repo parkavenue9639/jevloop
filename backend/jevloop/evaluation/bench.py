@@ -27,19 +27,16 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from . import runstore, sessions
-from .config import (
-    DEFAULT_AMBIGUITY_GATE,
-    DEFAULT_ANSWER_PROGRESS_FLOOR,
-    DEFAULT_ESCALATE_THRESHOLD,
-)
-from .drivers import JevDriver, PlainLlmDriver
-from .guardrails import WritePolicy
-from .kernel import RuntimeKernel
-from .metrics import RunMetrics
-from .runstore import Journal
-from .server import CACHE_POLICY_ISOLATED, _cache_scope
-from .tools.sandbox import (
+from jevloop.apps.server import CACHE_POLICY_ISOLATED, _cache_scope
+from jevloop.config import DEFAULT_AMBIGUITY_GATE, DEFAULT_ANSWER_PROGRESS_FLOOR, DEFAULT_ESCALATE_THRESHOLD
+from jevloop.contracts.policy import WritePolicy
+from jevloop.decision.drivers import JevDriver, PlainLlmDriver
+from jevloop.paths import BACKEND_ROOT
+from jevloop.runtime.kernel import RuntimeKernel
+from jevloop.runtime.metrics import RunMetrics
+from jevloop.storage import runstore, sessions
+from jevloop.storage.runstore import Journal
+from jevloop.tools.sandbox import (
     DockerSandboxContainer,
     DockerSandboxImage,
     SandboxTools,
@@ -47,7 +44,7 @@ from .tools.sandbox import (
 )
 
 LANES = ("jev", "baseline")
-DEFAULT_SCENARIOS = Path(__file__).resolve().parent.parent / "benchmarks" / "scenarios.json"
+DEFAULT_SCENARIOS = BACKEND_ROOT / "benchmarks" / "scenarios.json"
 FILE_SCAN_CAP = 40
 
 
@@ -159,7 +156,7 @@ def suite_digest(path) -> str:
 
 def runtime_digest() -> str:
     """Content digest of executable backend/sandbox sources for attribution."""
-    root = Path(__file__).resolve().parent.parent
+    root = BACKEND_ROOT
     candidates = [
         *sorted((root / "jevloop").rglob("*.py")),
         *sorted(path for path in (root / "docker" / "sandbox").rglob("*")
@@ -237,7 +234,7 @@ async def _remove_volume(name: str):
 
 async def _run_turn(scenario, turn, lane, storage_id, cache_scope, container, ctx,
                     journal=None):
-    from .projection import rebuild_workspace
+    from jevloop.context.projection import rebuild_workspace
 
     transcript = sessions.load(storage_id)
     workspace = None

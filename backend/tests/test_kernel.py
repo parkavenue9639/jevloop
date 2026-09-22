@@ -5,14 +5,14 @@ import json
 
 import pytest
 
-from jevloop import model
-from jevloop.drivers import DriverProposal, DriverRejected, JevDriver, PlainLlmDriver
-from jevloop.guardrails import WritePolicy
-from jevloop.kernel import RuntimeKernel
-from jevloop.projection import rebuild_workspace
-from jevloop.state import HISTORY_CAP, Workspace
-from jevloop.tools.base import ToolSpec
-from jevloop.transcript import Transcript, system_prompt
+from jevloop.context.projection import rebuild_workspace
+from jevloop.context.state import HISTORY_CAP, Workspace
+from jevloop.context.transcript import Transcript, system_prompt
+from jevloop.contracts.policy import WritePolicy
+from jevloop.contracts.tools import ToolSpec
+from jevloop.decision import model
+from jevloop.decision.drivers import DriverProposal, DriverRejected, JevDriver, PlainLlmDriver
+from jevloop.runtime.kernel import RuntimeKernel
 
 
 class SequenceDriver:
@@ -536,7 +536,7 @@ def test_operation_name_echo_is_rejected_as_malformed_authoring():
 
 
 def test_auto_acknowledge_unknown_unfreezes_non_live_continuation():
-    from jevloop.transcript import Transcript, system_prompt
+    from jevloop.context.transcript import Transcript, system_prompt
 
     def frozen_session():
         transcript = Transcript(system_prompt(Provider()), "earlier goal")
@@ -564,7 +564,7 @@ def test_auto_acknowledge_unknown_unfreezes_non_live_continuation():
 
 
 def test_auto_acknowledge_rebuilds_repaired_unknown_for_jev_state():
-    from jevloop.transcript import Transcript, system_prompt
+    from jevloop.context.transcript import Transcript, system_prompt
 
     transcript = Transcript(system_prompt(Provider()), "earlier goal")
     transcript.append_action("PING", {})

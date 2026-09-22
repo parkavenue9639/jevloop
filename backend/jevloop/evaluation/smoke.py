@@ -3,15 +3,16 @@
 import asyncio
 import json
 
-from .argument_helper import generate_arguments
-from .drivers import DriverProposal
-from .guardrails import WritePolicy
-from .kernel import RuntimeKernel
-from .projection import rebuild_workspace
-from .state import Workspace
-from .tools.base import ToolContext
-from .tools.sandbox import DockerSandboxContainer, DockerSandboxImage, SandboxTools
-from .transcript import Transcript, llm_tool_schemas
+from jevloop.context.projection import rebuild_workspace
+from jevloop.context.state import Workspace
+from jevloop.context.transcript import Transcript
+from jevloop.contracts.policy import WritePolicy
+from jevloop.contracts.schemas import llm_tool_schemas
+from jevloop.contracts.tools import ToolContext
+from jevloop.decision.argument_helper import generate_arguments
+from jevloop.decision.drivers import DriverProposal
+from jevloop.runtime.kernel import RuntimeKernel
+from jevloop.tools.sandbox import DockerSandboxContainer, DockerSandboxImage, SandboxTools
 
 
 class SmokeDriver:

@@ -8,10 +8,10 @@ import json
 import os
 import time
 
-from .arguments import arguments_complete
-from .guardrails import InvalidProposal
-from .model import post_json
-from .transcript import llm_tool_schemas
+from jevloop.contracts.arguments import arguments_complete
+from jevloop.contracts.policy import InvalidProposal
+from jevloop.contracts.schemas import llm_tool_schemas
+from jevloop.decision.model import post_json
 
 
 async def generate_arguments(transcript, provider, operation, post=None):

@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from jevloop.state import Workspace
-from jevloop.tools.base import ToolContext
+from jevloop.context.state import Workspace
+from jevloop.contracts.tools import ToolContext
 from jevloop.tools.sandbox import SPECS, DockerSandboxContainer, SandboxTools, validate_arguments
 
 
@@ -58,7 +58,7 @@ def invoke(runtime, operation, arguments, workspace=None, **legacy):
 
 
 def test_canonical_smoke_assertions_cover_the_provider_contract(fs):
-    from jevloop.smoke import check_canonical_tools
+    from jevloop.evaluation.smoke import check_canonical_tools
 
     class SmokeRuntime(Runtime):
         async def read_file(self, path):

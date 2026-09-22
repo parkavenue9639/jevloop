@@ -9,9 +9,9 @@ from dataclasses import dataclass
 
 import httpx
 
-from .arguments import LLM_PARAMETERS, bound_arguments, validate_arguments
-from .guardrails import InvalidProposal, MalformedAuthoredValue
-from .questions import (
+from jevloop.contracts.arguments import LLM_PARAMETERS, bound_arguments, validate_arguments
+from jevloop.contracts.policy import InvalidProposal, MalformedAuthoredValue
+from jevloop.decision.questions import (
     ACTION_PREAMBLE,
     CORE_ACTIONS,
     META_AMBIGUITY,
@@ -157,7 +157,7 @@ def _selected_arguments(spec, candidates, target, workspace):
 
 
 def _target_criteria(workspace, spec):
-    from .state import POOL_VOCAB
+    from jevloop.context.state import POOL_VOCAB
 
     entries = workspace.pool_entries(spec.target_pool)
     if spec.target_filter is not None:

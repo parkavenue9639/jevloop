@@ -13,21 +13,17 @@ import time
 import uuid
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
 
-from . import runstore, sessions
-from .config import (
-    DEFAULT_AMBIGUITY_GATE,
-    DEFAULT_ANSWER_PROGRESS_FLOOR,
-    DEFAULT_ESCALATE_THRESHOLD,
-)
-from .drivers import JevDriver, PlainLlmDriver
-from .guardrails import WritePolicy
-from .kernel import RuntimeKernel
-from .metrics import RunMetrics
-from .tools.sandbox import DockerSandboxContainer, DockerSandboxImage, SandboxTools
+from jevloop.config import DEFAULT_AMBIGUITY_GATE, DEFAULT_ANSWER_PROGRESS_FLOOR, DEFAULT_ESCALATE_THRESHOLD
+from jevloop.contracts.policy import WritePolicy
+from jevloop.decision.drivers import JevDriver, PlainLlmDriver
+from jevloop.paths import REPO_ROOT
+from jevloop.runtime.kernel import RuntimeKernel
+from jevloop.runtime.metrics import RunMetrics
+from jevloop.storage import runstore, sessions
+from jevloop.tools.sandbox import DockerSandboxContainer, DockerSandboxImage, SandboxTools
 
-WEB_DIST = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+WEB_DIST = REPO_ROOT / "frontend" / "dist"
 MIME = {".html": "text/html", ".js": "text/javascript", ".css": "text/css",
         ".svg": "image/svg+xml", ".json": "application/json", ".png": "image/png"}
 RUN_PROFILES = {"single_live", "single_shadow", "paired_shadow"}
@@ -234,7 +230,7 @@ class Dashboard:
         workspace = None
         transcript = sessions.load(session_storage_id)
         if transcript:
-            from .projection import rebuild_workspace
+            from jevloop.context.projection import rebuild_workspace
             workspace = rebuild_workspace(transcript)
             if cache_scope:
                 system = transcript.messages()[0].get("content", "")

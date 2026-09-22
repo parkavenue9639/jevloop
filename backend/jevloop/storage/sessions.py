@@ -12,10 +12,11 @@ import time
 import uuid
 from pathlib import Path
 
-from .transcript import Transcript
+from jevloop.context.transcript import Transcript
+from jevloop.paths import BACKEND_ROOT
 
 DIR = Path(os.environ.get("JEVLOOP_SESSIONS_DIR")
-           or Path(__file__).resolve().parent.parent / "artifacts" / "sessions")
+           or BACKEND_ROOT / "artifacts" / "sessions")
 
 
 def new_session_id() -> str:

@@ -1,28 +1,25 @@
-"""LLM content generation on the ledger: the LLM continues its own transcript
-with an instruction turn appended, and its reply IS the deliverable — recorded
-verbatim as a genuine author turn (no JSON envelope, no ghost-writing).
+"""Pure typed/free-form authored-value validation; no model transport."""
 
-Authored values are validated as typed content before anything dispatches: a
-malformed protocol fragment, a closed parameter of the wrong name, a truncated
-response, or an unexpected tool call fails as a recoverable
-MALFORMED_AUTHORED_VALUE observation instead of being written as if it were the
-requested value."""
-
-import os
 import re
-import time
 
-from .guardrails import MalformedAuthoredValue
-from .model import post_json
+from jevloop.contracts.policy import MalformedAuthoredValue
 
 _MAX_LEN = 20000
+
+
 _DSML_PARAMETER = re.compile(
     r"(?P<open><[^>]*DSML[^>]*\bparameter\b[^>]*>)"
     r"(?P<value>.*?)</[^>]*DSML[^>]*\bparameter\s*>",
     re.IGNORECASE | re.DOTALL,
 )
+
+
 _DSML_TAG = re.compile(r"<[^>]*DSML[^>]*>", re.IGNORECASE)
+
+
 _DSML_NAME = re.compile(r'\bname\s*=\s*"([^"]*)"', re.IGNORECASE)
+
+
 _DSML_INVOKE_NAME = re.compile(
     r'<[^>]*DSML[^>]*\binvoke\b[^>]*\bname\s*=\s*"([^"]+)"',
     re.IGNORECASE,
@@ -112,7 +109,6 @@ def _clean(text: str, field: str | None = None,
         _reject_unterminated_fragment(text)
     return _strip_fences(text).strip()
 
-
 def validate_authored_value(text: str) -> str:
     """Validate a value that arrived through a TYPED envelope (a function-call
     argument). It is data, not packaging: a complete DSML serialization inside
@@ -121,75 +117,3 @@ def validate_authored_value(text: str) -> str:
     text = text.strip()
     _reject_unterminated_fragment(text)
     return _strip_fences(text).strip()
-
-
-def _truncated_choice(choice) -> bool:
-    return (choice or {}).get("finish_reason") == "length"
-
-
-async def generate_text(transcript, instruction: str, post=None, field=None,
-                        operation=None):
-    """Append the instruction turn, let the LLM continue the ledger, record its
-    author turn. Returns (text, helper_info). Raises MalformedAuthoredValue on
-    refusal, unusable or truncated output, an unexpected tool call, or a closed
-    parameter that is not the requested `field` — typed, recoverable pre-dispatch
-    failures; nothing is appended to the ledger when one fires."""
-    key = os.environ.get("DEEPSEEK_API_KEY") or ""
-    if not key and post is None:  # injected posts (tests) don't need a real key
-        raise ValueError("Text generation needs DEEPSEEK_API_KEY; nothing is hardcoded.")
-    transcript.append_user(f"[content request] {instruction}")
-    base = os.environ.get("TEXT_MODEL_BASE_URL", "https://api.deepseek.com/v1").rstrip("/")
-    model = os.environ.get("TEXT_MODEL", "deepseek-chat")
-    started = time.perf_counter()
-    request = {"model": model, "max_tokens": 8192, "messages": transcript.llm_messages()}
-    result = await (post or post_json)(
-        base + "/chat/completions",
-        key,
-        request,
-    )
-    choice = result["choices"][0]
-    message = choice["message"]
-    helper_info = {
-        "kind": "authoring",
-        "model": model,
-        "latency_ms": round((time.perf_counter() - started) * 1000),
-        "usage": result.get("usage", {}),
-        "request": request,
-        "response": message,
-    }
-    if _truncated_choice(choice):
-        error = MalformedAuthoredValue(
-            "Text generation was truncated by the token limit; nothing was "
-            "written.",
-            details={"finish_reason": "length"},
-        )
-        error.helper_info = helper_info
-        raise error
-    if message.get("tool_calls"):
-        # never commit an authoring turn carrying tool calls: the kernel
-        # synthesizes its own executable call, so these would dangle
-        error = MalformedAuthoredValue(
-            "Text generation returned tool calls instead of an authored value; "
-            "nothing was written.",
-            details={"tool_call_ids": [call.get("id")
-                                       for call in message["tool_calls"]]},
-        )
-        error.helper_info = helper_info
-        raise error
-    try:
-        text = _clean(message.get("content") or "", field=field,
-                      operation=operation)
-    except MalformedAuthoredValue as error:
-        error.helper_info = helper_info
-        raise
-    if not text or len(text) > _MAX_LEN:
-        excerpt = repr(text[:120])
-        error = MalformedAuthoredValue(
-            f"Text generation returned no usable value ({excerpt}); nothing was written.",
-            details={"expected": f"non-empty string of at most {_MAX_LEN} chars",
-                     "got_length": len(text)},
-        )
-        error.helper_info = helper_info
-        raise error
-    transcript.append_assistant(message)
-    return text, helper_info

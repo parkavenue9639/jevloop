@@ -21,9 +21,10 @@ import tempfile
 import uuid
 from pathlib import Path
 
-from .base import ToolContext, ToolSpec
+from jevloop.contracts.tools import ToolContext, ToolSpec
+from jevloop.paths import BACKEND_ROOT
 
-DOCKER_DIR = Path(__file__).resolve().parents[2] / "docker" / "sandbox"
+DOCKER_DIR = BACKEND_ROOT / "docker" / "sandbox"
 DEFAULT_SEED = DOCKER_DIR / "seed"
 IMAGE_PREFIX = "jevloop-sandbox"
 

@@ -10,8 +10,10 @@ import threading
 import time
 from pathlib import Path
 
+from jevloop.paths import BACKEND_ROOT
+
 DIR = Path(os.environ.get("JEVLOOP_RUNS_DIR")
-           or Path(__file__).resolve().parent.parent / "artifacts" / "runs")
+           or BACKEND_ROOT / "artifacts" / "runs")
 
 
 def _path(run_id):

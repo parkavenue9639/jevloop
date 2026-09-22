@@ -3,7 +3,7 @@ import importlib.util
 import json
 from pathlib import Path
 
-from jevloop.bench import Turn
+from jevloop.evaluation.bench import Turn
 
 SPEC = importlib.util.spec_from_file_location(
     "family_runner", Path(__file__).resolve().parents[1] / "scripts/run_fastapi_families.py")

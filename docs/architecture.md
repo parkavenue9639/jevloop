@@ -3,6 +3,7 @@
 Core boundary: [Transcript projection contract](transcript-projection-contract.md)
 supersedes older descriptions equating the durable ledger with the LLM view.
 New features must preserve independent Jev/LLM projections and recovery facts.
+Package ownership and enforced import directions: [Backend layout](backend-layout.md).
 
 Current parameter-binding extension: [Observation views contract](observation-view-contract.md).
 It supersedes the older target-enumeration/text-authoring split where they differ:
@@ -43,20 +44,20 @@ RuntimeKernel ─── DecisionDriver.decide(ledger, workspace, catalog) ──
 
 Design invariants (carried from the current code, never relaxed by the target):
 
-1. **Ledger as single truth.** The `Transcript` (backend/jevloop/transcript.py)
+1. **Ledger as single truth.** The `Transcript` (backend/jevloop/context/transcript.py)
    is the durable record, not a model prompt. `llm_context.project_llm_messages`
    and `projection.rebuild_workspace` independently recover the LLM and Jev
    views. Model display budgets never alter durable facts; neither view is
    persisted as a second source of truth.
 2. **Tool-agnostic core.** The loop, guardrails and escalation layer hold zero
    tool knowledge; the action catalog comes exclusively from mounted
-   `ToolSpec`s (backend/jevloop/tools/base.py).
+   `ToolSpec`s (backend/jevloop/contracts/tools.py).
 3. **Fail-closed writes.** Writes are refuse-by-default; confidence gates,
    budgets and recipient allowlists are enforced before any effect
-   (backend/jevloop/guardrails.py).
+   (backend/jevloop/contracts/policy.py).
 4. **Calibration evidence.** Every decision's full distribution, and every
    (Jev distribution, LLM pick) pair, is recorded
-   (backend/jevloop/metrics.py `RunMetrics.escalate`).
+   (backend/jevloop/runtime/metrics.py `RunMetrics.escalate`).
 
 ---
 
@@ -66,25 +67,25 @@ Design invariants (carried from the current code, never relaxed by the target):
 
 | Concern | Symbol | File |
 | --- | --- | --- |
-| Shared execution loop | `RuntimeKernel`, `RuntimeKernel.run` | backend/jevloop/kernel.py |
-| Decision strategies | `JevDriver`, `PlainLlmDriver`, `DriverProposal` | backend/jevloop/drivers.py |
-| Jev client, question compiler, answer validation | `choose`, `compile_questions`, `validate_choice`, `action_catalog` | backend/jevloop/model.py |
-| Question texts (core actions, progress rules, target preamble) | `CORE_ACTIONS`, `PROGRESS_RULES`, `TARGET_PREAMBLE`, `ANSWER_TEXT` | backend/jevloop/questions.py |
-| Ledger | `Transcript` (`append_action` / `append_result` / `append_note` / `append_assistant` / `repair`) | backend/jevloop/transcript.py |
-| Projection (ledger ↔ workspace) | `record_execution`, `rebuild_workspace`, `_enrich` | backend/jevloop/projection.py |
-| LLM context projection | `project_llm_messages`, `result_view` | backend/jevloop/llm_context.py |
-| Decision-layer state, candidate pools | `Workspace`, `PoolEntry`, `ChatRef`, `DocRef`, `POOL_NAMES` | backend/jevloop/state.py |
-| Guardrails | `review`, `Budget`, `WritePolicy`, `GuardrailDenied` | backend/jevloop/guardrails.py |
-| Escalation (path A) | `should_escalate`, `arbitrate` | backend/jevloop/escalation.py |
-| LLM text authoring | `generate_text` | backend/jevloop/text_helper.py |
-| Tool surface | `ToolSpec`, `ToolProvider`, `ToolContext`, `CompositeProvider` | backend/jevloop/tools/base.py |
+| Shared execution loop | `RuntimeKernel`, `RuntimeKernel.run` | backend/jevloop/runtime/kernel.py |
+| Decision strategies | `JevDriver`, `PlainLlmDriver`, `DriverProposal` | backend/jevloop/decision/drivers.py |
+| Jev client, question compiler, answer validation | `choose`, `compile_questions`, `validate_choice`, `action_catalog` | backend/jevloop/decision/model.py |
+| Question texts (core actions, progress rules, target preamble) | `CORE_ACTIONS`, `PROGRESS_RULES`, `TARGET_PREAMBLE`, `ANSWER_TEXT` | backend/jevloop/decision/questions.py |
+| Ledger | `Transcript` (`append_action` / `append_result` / `append_note` / `append_assistant` / `repair`) | backend/jevloop/context/transcript.py |
+| Projection (ledger ↔ workspace) | `record_execution`, `rebuild_workspace`, `_enrich` | backend/jevloop/context/projection.py |
+| LLM context projection | `project_llm_messages`, `result_view` | backend/jevloop/context/llm_context.py |
+| Decision-layer state, candidate pools | `Workspace`, `PoolEntry`, `ChatRef`, `DocRef`, `POOL_NAMES` | backend/jevloop/context/state.py |
+| Guardrails | `review`, `Budget`, `WritePolicy`, `GuardrailDenied` | backend/jevloop/contracts/policy.py |
+| Escalation (path A) | `should_escalate`, `arbitrate` | backend/jevloop/decision/escalation.py |
+| LLM text authoring | `generate_text` | backend/jevloop/decision/text_helper.py |
+| Tool surface | `ToolSpec`, `ToolProvider`, `ToolContext`, `CompositeProvider` | backend/jevloop/contracts/tools.py |
 | Sandbox tools (LIST/READ/WRITE_FILE, BASH) | `SandboxTools`, `SPECS` | backend/jevloop/tools/sandbox.py |
 | Lark tools (9 Feishu actions) | `LarkTools`, `SPECS` | backend/jevloop/tools/lark.py |
-| lark-cli transport, envelope contract | `LarkAdapter`, `run`, `ConfirmationRequired` | backend/jevloop/adapter/lark_cli.py |
-| Dashboard server, lanes, SSE, replay | `Dashboard`, `RunState`, `serve` | backend/jevloop/server.py |
-| Run event persistence | `append`, `load`, `list_runs` | backend/jevloop/runstore.py |
-| Session persistence | `save`, `load`, `new_session_id` | backend/jevloop/sessions.py |
-| Metrics / cost accounting | `RunMetrics`, `summary` | backend/jevloop/metrics.py |
+| lark-cli transport, envelope contract | `LarkAdapter`, `run`, `ConfirmationRequired` | backend/jevloop/tools/adapter/lark_cli.py |
+| Dashboard server, lanes, SSE, replay | `Dashboard`, `RunState`, `serve` | backend/jevloop/apps/server.py |
+| Run event persistence | `append`, `load`, `list_runs` | backend/jevloop/storage/runstore.py |
+| Session persistence | `save`, `load`, `new_session_id` | backend/jevloop/storage/sessions.py |
+| Metrics / cost accounting | `RunMetrics`, `summary` | backend/jevloop/runtime/metrics.py |
 | CLI | `jevloop run`, `jevloop serve` | backend/jevloop/cli.py |
 | Dashboard UI (chat, paired turns, aggregate, replay) | frontend/src (`App.tsx`, `components/PairedTurn.tsx`, `SessionSummaryPanel.tsx`, `RunHistory.tsx`) | frontend/src |
 

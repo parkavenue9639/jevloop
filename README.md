@@ -278,13 +278,15 @@ docs/      Design of record, invariants, migration plan, and acceptance criteria
 
 Start with:
 
-- [`backend/jevloop/kernel.py`](backend/jevloop/kernel.py) — shared loop and
+- [`docs/backend-layout.md`](docs/backend-layout.md) — package ownership and
+  enforced dependency directions;
+- [`backend/jevloop/runtime/kernel.py`](backend/jevloop/runtime/kernel.py) — shared loop and
   execution semantics;
-- [`backend/jevloop/drivers.py`](backend/jevloop/drivers.py) — Jev and plain
+- [`backend/jevloop/decision/drivers.py`](backend/jevloop/decision/drivers.py) — Jev and plain
   LLM decision strategies;
-- [`backend/jevloop/model.py`](backend/jevloop/model.py) — Jev client,
+- [`backend/jevloop/decision/model.py`](backend/jevloop/decision/model.py) — Jev client,
   question compiler, and response validation;
-- [`backend/jevloop/transcript.py`](backend/jevloop/transcript.py) —
+- [`backend/jevloop/context/transcript.py`](backend/jevloop/context/transcript.py) —
   append-only conversation ledger;
 - [`docs/architecture.md`](docs/architecture.md) — complete architecture and
   target contracts.

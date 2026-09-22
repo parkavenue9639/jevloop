@@ -1,7 +1,7 @@
 """Action catalog assembly: core actions + provider tools, with state gating."""
 
-from jevloop.model import action_catalog
-from jevloop.state import ChatRef, Workspace
+from jevloop.context.state import ChatRef, Workspace
+from jevloop.decision.model import action_catalog
 from jevloop.tools.lark import LarkTools
 
 

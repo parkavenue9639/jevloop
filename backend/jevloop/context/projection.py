@@ -14,8 +14,8 @@ import hashlib
 import json
 from copy import deepcopy
 
-from .observations import normalize_observation, update_views
-from .state import PRIOR_ANSWER_EXCERPT_CHARS, ChatRef, DocRef, Workspace
+from jevloop.context.observations import normalize_observation, update_views
+from jevloop.context.state import PRIOR_ANSWER_EXCERPT_CHARS, ChatRef, DocRef, Workspace
 
 _EXEC_KEYS = {
     "status", "action", "created", "exit", "output", "dry_run", "reason",

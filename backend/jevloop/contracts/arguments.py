@@ -8,8 +8,8 @@ from copy import deepcopy
 
 from jsonschema import Draft202012Validator
 
-from .guardrails import InvalidProposal
-from .tools.base import text_field_for
+from jevloop.contracts.policy import InvalidProposal
+from jevloop.contracts.tools import text_field_for
 
 LLM_PARAMETERS = "LLM_PARAMETERS"
 
@@ -113,7 +113,7 @@ enforced by the shared policy. A model-authored value is never an authorization.
                 raise InvalidProposal(f"{operation} target is not an observed compatible reference: {target!r}.")
     text = argument_text(spec, args, operation)
     if isinstance(text, str):
-        from .text_helper import validate_authored_value
+        from jevloop.contracts.authored import validate_authored_value
         # Validate protocol truncation but do not reinterpret a typed envelope.
         normalized_text = validate_authored_value(text)
         if spec is None or spec.parameters is None:

@@ -10,17 +10,14 @@ import os
 import time
 from dataclasses import dataclass, field
 
-from .arguments import argument_target, argument_text, validate_arguments
-from .config import (
-    DEFAULT_AMBIGUITY_GATE,
-    DEFAULT_ANSWER_PROGRESS_FLOOR,
-    DEFAULT_ESCALATE_THRESHOLD,
-)
-from .escalation import arbitrate, latest_recoverable, should_escalate
-from .guardrails import InvalidProposal, MalformedAuthoredValue
-from .model import action_catalog, choose, compile_questions, post_json
-from .text_helper import _clean
-from .transcript import Transcript, llm_tool_schemas
+from jevloop.config import DEFAULT_AMBIGUITY_GATE, DEFAULT_ANSWER_PROGRESS_FLOOR, DEFAULT_ESCALATE_THRESHOLD
+from jevloop.context.transcript import Transcript
+from jevloop.contracts.arguments import argument_target, argument_text, validate_arguments
+from jevloop.contracts.authored import _clean
+from jevloop.contracts.policy import InvalidProposal, MalformedAuthoredValue
+from jevloop.contracts.schemas import llm_tool_schemas
+from jevloop.decision.escalation import arbitrate, latest_recoverable, should_escalate
+from jevloop.decision.model import action_catalog, choose, compile_questions, post_json
 
 
 @dataclass(frozen=True)

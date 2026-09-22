@@ -2,7 +2,7 @@
 
 import json
 
-from jevloop.observations import (
+from jevloop.context.observations import (
     DIRECTORY_REF_CAP,
     FILE_REF_CAP,
     VIEW_CAP,
@@ -11,9 +11,9 @@ from jevloop.observations import (
     normalize_observation,
     update_views,
 )
-from jevloop.projection import intent_fingerprint, rebuild_workspace, record_execution
-from jevloop.state import ChatRef, Workspace
-from jevloop.transcript import Transcript
+from jevloop.context.projection import intent_fingerprint, rebuild_workspace, record_execution
+from jevloop.context.state import ChatRef, Workspace
+from jevloop.context.transcript import Transcript
 
 
 def listing(scope=".", count=3, **extra):

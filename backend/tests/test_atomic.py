@@ -10,9 +10,9 @@ from itertools import pairwise
 
 import pytest
 
-from jevloop.state import Workspace
+from jevloop.context.state import Workspace
+from jevloop.contracts.tools import ToolContext, write_actions
 from jevloop.tools import sandbox
-from jevloop.tools.base import ToolContext, write_actions
 from jevloop.tools.sandbox import (
     DockerSandboxContainer,
     DockerSandboxImage,

@@ -19,7 +19,7 @@ import json
 import os
 import re
 
-from ..state import ChatRef, DocRef
+from jevloop.context.state import ChatRef, DocRef
 
 LARK_ENV = {
     "LARKSUITE_CLI_NO_UPDATE_NOTIFIER": "1",

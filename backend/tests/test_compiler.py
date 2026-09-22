@@ -4,10 +4,10 @@ import asyncio
 
 import pytest
 
-from jevloop import model
-from jevloop.model import compile_questions
-from jevloop.state import ChatRef, Workspace
-from jevloop.tools.base import CompositeProvider, ToolSpec
+from jevloop.context.state import ChatRef, Workspace
+from jevloop.contracts.tools import CompositeProvider, ToolSpec
+from jevloop.decision import model
+from jevloop.decision.model import compile_questions
 from jevloop.tools.lark import LarkTools
 from jevloop.tools.sandbox import SandboxTools
 

@@ -248,10 +248,10 @@ docs/      设计记录、系统不变量、迁移计划与验收条件
 
 建议从以下文件开始阅读：
 
-- [`backend/jevloop/kernel.py`](backend/jevloop/kernel.py) — 共享 Loop 与执行语义；
-- [`backend/jevloop/drivers.py`](backend/jevloop/drivers.py) — Jev 与纯 LLM Driver；
-- [`backend/jevloop/model.py`](backend/jevloop/model.py) — Jev Client、问题编译与响应校验；
-- [`backend/jevloop/transcript.py`](backend/jevloop/transcript.py) — 追加式对话账本；
+- [`backend/jevloop/runtime/kernel.py`](backend/jevloop/runtime/kernel.py) — 共享 Loop 与执行语义；
+- [`backend/jevloop/decision/drivers.py`](backend/jevloop/decision/drivers.py) — Jev 与纯 LLM Driver；
+- [`backend/jevloop/decision/model.py`](backend/jevloop/decision/model.py) — Jev Client、问题编译与响应校验；
+- [`backend/jevloop/context/transcript.py`](backend/jevloop/context/transcript.py) — 追加式对话账本；
 - [`docs/architecture.md`](docs/architecture.md) — 完整架构与目标契约。
 
 ## 开发

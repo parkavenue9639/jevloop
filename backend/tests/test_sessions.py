@@ -2,8 +2,8 @@
 
 import pytest
 
-from jevloop import sessions
-from jevloop.transcript import Transcript
+from jevloop.context.transcript import Transcript
+from jevloop.storage import sessions
 
 
 def test_save_atomically_replaces_session_without_temp_leaks(tmp_path, monkeypatch):

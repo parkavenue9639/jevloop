@@ -97,7 +97,7 @@ def run_probe(probe, cwd):
 
 
 def test_load_fixed_suite_with_all_twenty_turns(tmp_path):
-    from jevloop.bench import load_scenarios
+    from jevloop.evaluation.bench import load_scenarios
 
     payload = suite_payload()
     path = tmp_path / "suite.json"

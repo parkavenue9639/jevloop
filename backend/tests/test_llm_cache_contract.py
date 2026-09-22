@@ -6,16 +6,17 @@ from copy import deepcopy
 
 import pytest
 
-from jevloop.argument_helper import generate_arguments
-from jevloop.drivers import DriverContext, DriverProposal, JevDriver, PlainLlmDriver
-from jevloop.escalation import arbitrate
-from jevloop.guardrails import InvalidProposal, WritePolicy
-from jevloop.kernel import RuntimeKernel
-from jevloop.model import _selected_arguments, compile_questions
-from jevloop.state import Workspace
-from jevloop.tools.base import ToolSpec
+from jevloop.context.state import Workspace
+from jevloop.context.transcript import Transcript
+from jevloop.contracts.policy import InvalidProposal, WritePolicy
+from jevloop.contracts.schemas import llm_tool_schemas
+from jevloop.contracts.tools import ToolSpec
+from jevloop.decision.argument_helper import generate_arguments
+from jevloop.decision.drivers import DriverContext, DriverProposal, JevDriver, PlainLlmDriver
+from jevloop.decision.escalation import arbitrate
+from jevloop.decision.model import _selected_arguments, compile_questions
+from jevloop.runtime.kernel import RuntimeKernel
 from jevloop.tools.sandbox import SandboxTools
-from jevloop.transcript import Transcript, llm_tool_schemas
 
 
 def completion(operation, args):
@@ -85,7 +86,7 @@ def test_all_llm_routes_share_tools_despite_operation_and_availability_changes(m
         assert verdict["valid"]
         await PlainLlmDriver().decide(DriverContext("goal", Workspace(), ledger, provider))
 
-    monkeypatch.setattr("jevloop.drivers.post_json", post)
+    monkeypatch.setattr("jevloop.decision.drivers.post_json", post)
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-only")
     asyncio.run(run())
     assert len(requests) == 6
@@ -194,7 +195,7 @@ def test_plain_request_note_is_committed_without_rewriting_previous_prefix(monke
         requests.append(deepcopy(request))
         return completion("READ_FILE", {"path": f"file-{len(requests)}.py"})
 
-    monkeypatch.setattr("jevloop.drivers.post_json", post)
+    monkeypatch.setattr("jevloop.decision.drivers.post_json", post)
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-only")
     kernel = RuntimeKernel(PlainLlmDriver(), provider, WritePolicy(), max_steps=2)
     collect(kernel)
@@ -226,7 +227,7 @@ def test_full_authoring_uses_new_path_and_commits_exact_execution(monkeypatch):
         assert "old.py" not in request["messages"][-1]["content"]
         return completion("WRITE_FILE", {"path": "new.py", "content": "new content"})
 
-    monkeypatch.setattr("jevloop.argument_helper.post_json", post)
+    monkeypatch.setattr("jevloop.decision.argument_helper.post_json", post)
     events = []
     kernel = RuntimeKernel(DecisionDriver({"operation": "WRITE_FILE", "confidence": 1.0,
         "binding_mode": "llm_parameters"}), provider,
@@ -250,7 +251,7 @@ def test_decline_or_operation_switch_is_billed_but_never_executed(monkeypatch, o
     async def post(*_args):
         return completion(operation, args)
 
-    monkeypatch.setattr("jevloop.argument_helper.post_json", post)
+    monkeypatch.setattr("jevloop.decision.argument_helper.post_json", post)
     kernel = RuntimeKernel(DecisionDriver({"operation": "WRITE_FILE", "confidence": 1.0,
         "binding_mode": "llm_parameters", "bound_arguments": {}}), provider,
         WritePolicy(), max_steps=1)

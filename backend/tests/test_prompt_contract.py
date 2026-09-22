@@ -4,9 +4,9 @@ import json
 
 import pytest
 
-from jevloop import model, questions
-from jevloop.state import Workspace
-from jevloop.tools.base import ToolSpec
+from jevloop.context.state import Workspace
+from jevloop.contracts.tools import ToolSpec
+from jevloop.decision import model, questions
 from jevloop.tools.sandbox import SPECS, SandboxTools
 
 

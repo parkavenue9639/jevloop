@@ -6,16 +6,16 @@ from copy import deepcopy
 
 import pytest
 
-from jevloop import sessions
-from jevloop.argument_helper import generate_arguments
-from jevloop.drivers import DriverContext, PlainLlmDriver
-from jevloop.escalation import arbitrate
-from jevloop.observations import normalize_observation
-from jevloop.projection import rebuild_workspace, record_execution
-from jevloop.state import Workspace
-from jevloop.text_helper import generate_text
+from jevloop.context.observations import normalize_observation
+from jevloop.context.projection import rebuild_workspace, record_execution
+from jevloop.context.state import Workspace
+from jevloop.context.transcript import Transcript
+from jevloop.decision.argument_helper import generate_arguments
+from jevloop.decision.drivers import DriverContext, PlainLlmDriver
+from jevloop.decision.escalation import arbitrate
+from jevloop.decision.text_helper import generate_text
+from jevloop.storage import sessions
 from jevloop.tools.sandbox import SandboxTools
-from jevloop.transcript import Transcript
 
 INTERNAL = "INTERNAL_SENTINEL_9ad6"
 OUTPUT = "Unique command output: violet telescope"
@@ -110,7 +110,7 @@ def test_all_real_llm_routes_use_the_clean_projection(monkeypatch, route):
                 "role": "assistant", "content": "finished"}}]}
         return completion()
 
-    monkeypatch.setattr("jevloop.drivers.post_json", post)
+    monkeypatch.setattr("jevloop.decision.drivers.post_json", post)
     monkeypatch.setenv("DEEPSEEK_API_KEY", "offline-test-only")
 
     async def run():
@@ -271,7 +271,7 @@ def test_unregistered_and_explicit_no_reference_kinds_do_not_gain_authority(kind
 
 
 def test_long_results_survive_model_caps_without_changing_durable_or_jev(monkeypatch):
-    from jevloop import llm_context
+    from jevloop.context import llm_context
 
     ledger, live = Transcript("system", "goal"), Workspace()
     content = "long raw text with unicode 雪🙂 " * 2500
@@ -389,7 +389,7 @@ def test_old_bounded_view_and_new_raw_observation_restore_together():
 
 
 def test_committed_arguments_and_recovery_metadata_are_not_llm_display_bounded(monkeypatch):
-    from jevloop import llm_context
+    from jevloop.context import llm_context
 
     ledger = Transcript("system", "goal")
     arguments = {"path": "large.txt", "content": "unabridged committed argument " * 2000}
@@ -416,7 +416,7 @@ def test_malformed_legacy_bash_note_does_not_crash_the_llm_projection():
     assert "usable partial output" in serialized(result)
     assert ledger.unresolved_unknown_calls() == [call]
 def test_new_bash_observation_takes_precedence_over_longer_legacy_note():
-    from jevloop.llm_context import result_view
+    from jevloop.context.llm_context import result_view
 
     result = result_view({
         "status": "ready", "observation": {"evidence": "current", "scope": "."},
@@ -427,7 +427,7 @@ def test_new_bash_observation_takes_precedence_over_longer_legacy_note():
 
 
 def test_malformed_legacy_structure_cannot_overflow_display_budget():
-    from jevloop.llm_context import RESULT_CAP, _serialize, result_view
+    from jevloop.context.llm_context import RESULT_CAP, _serialize, result_view
 
     source = {"status": "failed", "effect_disposition": "UNKNOWN",
               "effect_proof": list(range(10000)),
