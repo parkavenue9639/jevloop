@@ -78,8 +78,8 @@ to open. JevLoop separates that work by type:
   transcript.
 - **The runtime executes** every effect through shared budgets, policies,
   idempotency, repeat guards, and sandbox boundaries.
-- **The ledger remembers** the verbatim LLM-visible conversation; Jev receives a
-  compact projection rebuilt from that ledger.
+- **The ledger remembers** conversation, execution evidence and recovery facts;
+  Jev and the LLM receive independent projections rebuilt from that ledger.
 
 This architecture is designed to reduce model latency and cost when Jev can
 complete a meaningful share of steps directly. JevLoop does not claim every
@@ -97,9 +97,12 @@ probability distributions fail before execution.
 
 ### One ledger, two views
 
-The LLM reads the complete `Transcript`. Jev reads a bounded `Workspace`
-projection containing known resources, recent observations, and recent actions.
-Only the transcript is persisted; workspace state is recoverable.
+The durable `Transcript` is the single source, not either model's prompt.
+The LLM reads a stable conversation projection with deduplicated tool evidence;
+Jev reads a bounded `Workspace` with observations and grounded candidates.
+Recovery metadata and Jev views do not enter LLM tool results. Only the transcript
+is persisted; both views are recoverable and own independent display budgets.
+See the [projection contract](docs/transcript-projection-contract.md).
 
 ### Observations become optional argument bindings
 

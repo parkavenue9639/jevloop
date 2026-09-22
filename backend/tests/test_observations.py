@@ -131,7 +131,7 @@ def test_reference_paths_are_whole_safe_values_not_truncated_strings():
     assert {ref["value"] for ref in view["references"]} == {"sub/" + "a" * 400, "valid.py"}
 
 
-def test_ledger_budget_never_shortens_reference_paths_or_context_source():
+def test_model_budgets_never_shorten_durable_reference_paths_or_evidence():
     ledger = Transcript("system", "goal")
     live = Workspace()
     raw = listing("src", 0, evidence="证据" * 4000)
@@ -139,9 +139,13 @@ def test_ledger_budget_never_shortens_reference_paths_or_context_source():
     record(ledger, live, raw, operation="READ_FILE", output="raw" * 20000,
            file_results=[{"target": "src/" + "long" * 150, "status": "ready", "content": "x" * 25000}])
     message = ledger.dump()[-1]
-    assert len(message["content"]) < 12000
-    stored = json.loads(message["content"])["observation_view"]
-    assert stored == live.observation_views[-1]
+    assert len(message["content"]) > 12000
+    assert len(ledger.llm_messages()[-1]["content"]) <= 12000
+    durable = json.loads(message["content"])
+    assert "observation_view" not in durable
+    stored = durable["observation"]
+    assert stored == raw
+    assert durable["file_results"][0]["content"] == "x" * 25000
     assert stored["references"][0]["value"] == raw["references"][0]["value"]
     assert live.observation_views == rebuild_workspace(ledger).observation_views
 

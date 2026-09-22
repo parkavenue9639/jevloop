@@ -1,5 +1,9 @@
 # Architecture
 
+Core boundary: [Transcript projection contract](transcript-projection-contract.md)
+supersedes older descriptions equating the durable ledger with the LLM view.
+New features must preserve independent Jev/LLM projections and recovery facts.
+
 Current parameter-binding extension: [Observation views contract](observation-view-contract.md).
 It supersedes the older target-enumeration/text-authoring split where they differ:
 all tools expose canonical schemas, observation-grounded shortcuts are optional,
@@ -33,16 +37,17 @@ RuntimeKernel ─── DecisionDriver.decide(ledger, workspace, catalog) ──
       │  text authoring    text_helper on the ledger, or a genuine LLM turn
       │  execution         CompositeProvider(SandboxTools → container, LarkTools → adapter)
       │  durability        intent → effect → verification records (runstore JSONL)
-      │  ledger            Transcript (LLM view) + Workspace (Jev projection, recovered)
+      │  ledger            Transcript → independent LLM messages / Jev Workspace
       └  events            RunState → SSE stream + artifacts/runs/<run_id>.jsonl
 ```
 
 Design invariants (carried from the current code, never relaxed by the target):
 
 1. **Ledger as single truth.** The `Transcript` (backend/jevloop/transcript.py)
-   is the LLM-visible record; the Jev view (`Workspace`,
-   backend/jevloop/state.py) is a projection rebuilt by
-   `projection.rebuild_workspace`, never persisted separately.
+   is the durable record, not a model prompt. `llm_context.project_llm_messages`
+   and `projection.rebuild_workspace` independently recover the LLM and Jev
+   views. Model display budgets never alter durable facts; neither view is
+   persisted as a second source of truth.
 2. **Tool-agnostic core.** The loop, guardrails and escalation layer hold zero
    tool knowledge; the action catalog comes exclusively from mounted
    `ToolSpec`s (backend/jevloop/tools/base.py).
@@ -67,6 +72,7 @@ Design invariants (carried from the current code, never relaxed by the target):
 | Question texts (core actions, progress rules, target preamble) | `CORE_ACTIONS`, `PROGRESS_RULES`, `TARGET_PREAMBLE`, `ANSWER_TEXT` | backend/jevloop/questions.py |
 | Ledger | `Transcript` (`append_action` / `append_result` / `append_note` / `append_assistant` / `repair`) | backend/jevloop/transcript.py |
 | Projection (ledger ↔ workspace) | `record_execution`, `rebuild_workspace`, `_enrich` | backend/jevloop/projection.py |
+| LLM context projection | `project_llm_messages`, `result_view` | backend/jevloop/llm_context.py |
 | Decision-layer state, candidate pools | `Workspace`, `PoolEntry`, `ChatRef`, `DocRef`, `POOL_NAMES` | backend/jevloop/state.py |
 | Guardrails | `review`, `Budget`, `WritePolicy`, `GuardrailDenied` | backend/jevloop/guardrails.py |
 | Escalation (path A) | `should_escalate`, `arbitrate` | backend/jevloop/escalation.py |

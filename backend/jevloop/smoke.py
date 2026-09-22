@@ -7,10 +7,11 @@ from .argument_helper import generate_arguments
 from .drivers import DriverProposal
 from .guardrails import WritePolicy
 from .kernel import RuntimeKernel
+from .projection import rebuild_workspace
 from .state import Workspace
 from .tools.base import ToolContext
 from .tools.sandbox import DockerSandboxContainer, DockerSandboxImage, SandboxTools
-from .transcript import llm_tool_schemas
+from .transcript import Transcript, llm_tool_schemas
 
 
 class SmokeDriver:
@@ -188,6 +189,11 @@ async def check_argument_routes(container):
     async def author(ledger, tools, operation):
         async def post(_url, _key, request):
             assert request["tools"] == llm_tool_schemas(provider)
+            for message in request["messages"]:
+                if message["role"] == "tool":
+                    result = json.loads(message["content"])
+                    assert not ({"observation", "observation_view", "observation_kinds",
+                                 "intent_fingerprint", "observation_fingerprint", "provenance"} & result.keys())
             authored.append(operation)
             arguments = ({"path": path, "content": "full-arguments-ok"}
                          if operation == "WRITE_FILE" else {"answer": "cache-contract-ok"})
@@ -205,7 +211,13 @@ async def check_argument_routes(container):
     assert authored == ["WRITE_FILE", "ANSWER"]  # complete READ executes without an LLM
     assert len(kernel.metrics.helper_calls) == 2
     assert kernel.transcript.repair() == 0
-    return ["full_argument_generation", "complete_read_without_llm", "stable_authoring_schemas"]
+    restored = Transcript.from_messages(json.loads(json.dumps(kernel.transcript.dump())))
+    assert restored.llm_messages() == kernel.transcript.llm_messages()
+    assert rebuild_workspace(restored).observation_views == kernel.workspace.observation_views
+    assert any("observation_kinds" in json.loads(message["content"])
+               for message in restored.dump() if message["role"] == "tool")
+    return ["full_argument_generation", "complete_read_without_llm", "stable_authoring_schemas",
+            "independent_context_projections", "durable_restore_parity"]
 
 
 def main():

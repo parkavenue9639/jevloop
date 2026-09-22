@@ -241,9 +241,9 @@ def test_append_result_keeps_large_envelopes_parseable():
     assert len(tool_message["content"]) <= 12000
     parsed = json.loads(tool_message["content"])  # never a byte-sliced JSON
     assert parsed["status"] == "ready"
-    # correlation IDs are never bounded, whatever the structural string cap
-    assert parsed["observation_id"] == "o" * 32
-    assert parsed["attempt_id"] == "a" * 32
+    # Recovery identities remain exact in the source, not in the LLM view.
+    assert "observation_id" not in parsed and "attempt_id" not in parsed
+    assert json.loads(ledger.dump()[-1]["content"]) == payload
     assert [chat["id"] for chat in parsed["chats"]] == [f"c{i}" for i in range(6)]
 
 
@@ -270,8 +270,8 @@ def test_result_omission_fallback_preserves_mandatory_envelope_fields():
     assert parsed["effect_disposition"] == "UNKNOWN"
     assert parsed["error"]["code"] == "EFFECT_UNKNOWN"
     assert parsed["error"]["recoverability"] == "unsafe"
-    assert parsed["observation_id"] == "obs-1"
-    assert parsed["attempt_id"] == "att-1"
+    assert "observation_id" not in parsed and "attempt_id" not in parsed
+    assert json.loads(ledger.dump()[-1]["content"]) == payload
     assert "chats" not in parsed  # only bulky evidence drops
 
 

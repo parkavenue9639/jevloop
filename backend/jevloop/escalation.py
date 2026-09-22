@@ -93,7 +93,7 @@ def _recovery_note_text(observation):
     operation = observation.get("operation") or "the previous action"
     return (
         "[recovery note] The previous attempt was refused or failed without "
-        f"being applied: {operation} (observation {observation.get('observation_id')}) "
+        f"being applied: {operation} "
         f"ended with {error.get('code')} at stage {error.get('stage')}; effect: "
         f"{observation.get('disposition') or 'unknown'}. Using this evidence, "
         "choose the best next permitted action — inspect what happened, correct "
@@ -128,7 +128,7 @@ async def arbitrate(transcript, jev_decision, provider, valid_actions, post=None
     request = {
         "model": os.environ.get("TEXT_MODEL", "deepseek-chat"),
         "max_tokens": 8192,
-        "messages": [*transcript.messages(), {"role": "user", "content": note}],
+        "messages": [*transcript.llm_messages(), {"role": "user", "content": note}],
         "tools": _scoped_tool_schemas(provider, jev_decision, valid_actions),
         "tool_choice": "auto",
         "parallel_tool_calls": False,

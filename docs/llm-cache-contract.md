@@ -3,6 +3,10 @@
 Implementation contract, 2026-09-22. Supersedes the partial-binding rules in
 `observation-view-contract.md`; branch `feat/observation-view-bindings`.
 
+Context boundary: [Transcript projection contract](transcript-projection-contract.md).
+All LLM paths consume its deterministic model view, not raw recovery records.
+Schema stability and context isolation are separate required invariants.
+
 ## Two routes, no partial authoring
 
 - Jev sees bounded, evidence-derived **complete** invocation candidates and an

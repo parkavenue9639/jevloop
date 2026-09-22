@@ -12,6 +12,7 @@ context is RECOVERED from it by an engineering method.
 
 import hashlib
 import json
+from copy import deepcopy
 
 from .observations import normalize_observation, update_views
 from .state import PRIOR_ANSWER_EXCERPT_CHARS, ChatRef, DocRef, Workspace
@@ -21,6 +22,7 @@ _EXEC_KEYS = {
     "receipt", "effect_disposition", "effect_proof", "error", "partial",
     "read_files", "changed_files", "files_may_have_changed", "file_results",
     "resolved", "resolution", "continuation", "container_running",
+    "matches", "data",
 }
 
 
@@ -167,47 +169,41 @@ def record_execution(transcript, operation, arguments, outcome, workspace,
     raw_view = outcome.get("observation")
     if not isinstance(raw_view, dict):
         raw_view = _legacy_observation(operation, arguments or {}, result)
-    view = normalize_observation(raw_view, operation=operation, call_id=call_id,
-                                 arguments=arguments, reference_kinds=reference_kinds)
-    if view is not None:
-        result["observation_view"] = view
-        result = _fit_observation_result(result)
+    if isinstance(raw_view, dict):
+        # Persist provider facts, not the bounded Jev rendering. Its budgets
+        # cannot destroy evidence needed independently by LLM or recovery.
+        result["observation"] = deepcopy(raw_view)
+        result["observation_kinds"] = (list(reference_kinds) if reference_kinds is not None else None)
+    # Live and restored Jev views consume the same durable observation facts.
+    view = _observation_from_record(result, operation, call_id, arguments)
     transcript.append_result(call_id, result)
-    # Providers already update legacy caches/notes. Only project the new view
-    # here, once; the kernel owns history. Replay uses exactly the persisted view.
     if view is not None:
         _apply_observation(workspace, view)
     return call_id
 
 
-def _fit_observation_result(result):
-    """Reserve the immutable observation envelope before generic ledger caps.
-
-    The generic serializer may shorten any string, including a reference path.
-    Fit other evidence first so it never needs to touch this view. An oversized
-    structural envelope fails closed instead of losing recovery references.
-    """
-    from .transcript import _bound_strings
-
-    reserved = {key: result[key] for key in ("observation_view", "canonical_target") if key in result}
-    other = {key: value for key, value in result.items() if key not in reserved}
-    fitted = dict(result)
-    cap = 2000
-    while len(json.dumps(fitted, ensure_ascii=False, default=str)) > 11800 and cap >= 64:
-        fitted = {**_bound_strings(other, cap), **reserved,
-                  "evidence_bounded": True}
-        cap //= 2
-    if len(json.dumps(fitted, ensure_ascii=False, default=str)) > 11800:
-        raise ValueError("Observation result exceeds ledger structural budget")
-    return fitted
+def _observation_from_record(result, operation, call_id, arguments):
+    if isinstance(result.get("observation"), dict):
+        return normalize_observation(result["observation"], operation=operation,
+                                     call_id=call_id, arguments=arguments,
+                                     reference_kinds=result.get("observation_kinds"))
+    # Historical ledgers stored a bounded view. Preserve their evidence and
+    # identity rather than pretending omitted raw facts can be recovered.
+    if isinstance(result.get("observation_view"), dict):
+        return deepcopy(result["observation_view"])
+    return normalize_observation(_legacy_observation(operation, arguments, result),
+                                 operation=operation, call_id=call_id, arguments=arguments)
 
 
 def _legacy_observation(operation, arguments, result):
     """Compatibility projections from registered, structured result fields."""
     raw = None
     if operation == "BASH":
-        note = result.get("bash_note") or {}
-        output = result.get("output", note.get("output", result.get("output_excerpt", "")))
+        note = result.get("bash_note")
+        note = note if isinstance(note, dict) else {}
+        outputs = [value for value in (note.get("output"), result.get("output_excerpt"), result.get("output"))
+                   if isinstance(value, str)]
+        output = max(outputs, key=len, default="")
         if output:
             raw = {"scope": "sandbox", "evidence": str(output), "references": []}
     if result.get("status") not in {"ready", "done"}:
@@ -238,9 +234,8 @@ def _apply_observation(workspace, view):
 
 
 def rebuild_workspace(transcript) -> Workspace:
-    """Recover the Jev view from the ledger. Best-effort by design: truncated
-    or unparsable results are skipped — the ledger itself stays complete for
-    the LLM, and the Jev view only needs candidates and recent context.
+    """Recover Jev independently from durable facts, never from the LLM view.
+    Legacy truncated/unparsable results cannot recreate missing evidence.
     Superseded sibling results are protocol bookkeeping, not attempts: they
     apply nothing and produce no history entries."""
     workspace = Workspace()
@@ -259,10 +254,7 @@ def rebuild_workspace(transcript) -> Workspace:
                 continue
             arguments = _parse_arguments(call)
             _apply(workspace, name, result)
-            view = result.get("observation_view")
-            if not isinstance(view, dict):
-                view = normalize_observation(_legacy_observation(name, arguments, result),
-                                             operation=name, call_id=call.get("id"), arguments=arguments)
+            view = _observation_from_record(result, name, call.get("id"), arguments)
             if view is not None:
                 _apply_observation(workspace, view)
             if name == "ANSWER" and result.get("status") == "done" \
@@ -281,7 +273,7 @@ def _result_after(messages, assistant_index, call_id):
         if message.get("role") == "tool" and message.get("tool_call_id") == call_id:
             try:
                 return json.loads(message.get("content") or "")
-            except json.JSONDecodeError:
+            except (json.JSONDecodeError, TypeError):
                 return None
         if message.get("role") in {"assistant", "user"}:
             return None  # no response turn for this call

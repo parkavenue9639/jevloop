@@ -8,7 +8,6 @@ transcript; RuntimeKernel owns those state transitions for every lane.
 import json
 import os
 import time
-from copy import deepcopy
 from dataclasses import dataclass, field
 
 from .arguments import argument_target, argument_text, validate_arguments
@@ -337,7 +336,7 @@ class PlainLlmDriver:
         schemas = llm_tool_schemas(context.provider)
         note = (f"[operation request] Currently permitted operations: {', '.join(sorted(valid_actions))}. "
                 "Choose your best next permitted action; catalog visibility is not authorization.")
-        request_transcript = Transcript.from_messages(deepcopy(context.transcript.messages()))
+        request_transcript = Transcript.from_messages(context.transcript.dump())
         request_transcript.append_note(note)
         if self._llm_call:
             message, helper, request = await self._llm_call(request_transcript, schemas)
@@ -467,7 +466,7 @@ class PlainLlmDriver:
         request = {
             "model": model,
             "max_tokens": 8192,
-            "messages": transcript.messages(),
+            "messages": transcript.llm_messages(),
             "tools": schemas,
             "tool_choice": "auto",
             "parallel_tool_calls": False,

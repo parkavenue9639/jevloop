@@ -3,6 +3,11 @@
 Status: implementation contract, 2026-09-22. Branch:
 `feat/observation-view-bindings`, baseline `7836c03`.
 
+Update: [Transcript projection contract](transcript-projection-contract.md)
+supersedes storing bounded Jev views in the source and shared ledger/display
+budgets. New records persist observation facts; Jev and LLM recover independent
+views. Historical implementation receipts below are retained as history.
+
 Update: [Stable LLM tool contract](llm-cache-contract.md) supersedes the
 partial-binding/remaining-parameter authoring design below. Historical run
 receipts remain unchanged; current candidates must be complete, or Jev selects

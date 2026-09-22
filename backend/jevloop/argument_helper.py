@@ -28,7 +28,7 @@ async def generate_arguments(transcript, provider, operation, post=None):
     )
     request = {
         "model": os.environ.get("TEXT_MODEL", "deepseek-chat"), "max_tokens": 8192,
-        "messages": [*transcript.messages(), {"role": "user", "content": note}],
+        "messages": [*transcript.llm_messages(), {"role": "user", "content": note}],
         "tools": llm_tool_schemas(provider), "tool_choice": "required", "parallel_tool_calls": False,
     }
     started = time.perf_counter()

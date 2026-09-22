@@ -141,7 +141,7 @@ async def generate_text(transcript, instruction: str, post=None, field=None,
     base = os.environ.get("TEXT_MODEL_BASE_URL", "https://api.deepseek.com/v1").rstrip("/")
     model = os.environ.get("TEXT_MODEL", "deepseek-chat")
     started = time.perf_counter()
-    request = {"model": model, "max_tokens": 8192, "messages": transcript.messages()}
+    request = {"model": model, "max_tokens": 8192, "messages": transcript.llm_messages()}
     result = await (post or post_json)(
         base + "/chat/completions",
         key,

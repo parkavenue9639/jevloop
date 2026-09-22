@@ -1,14 +1,12 @@
-"""Conversation ledger: a traditional agent-loop transcript the LLM believes it authored.
+"""Durable conversation facts, not either model's context format.
 
-Jev's decisions are synthesized into it as assistant tool-call turns; when Jev's
-confidence is low, the LLM is asked to genuinely generate the next turn on this
-exact prefix — from its perspective it has been driving the agent all along.
-The prefix is append-only and byte-stable so provider prompt caching carries
-across arbitrations; arbitration semantics ride in appended note turns, never
-by rewriting the system prompt.
+Recovery and Jev rebuild from dump(); all LLM consumers use llm_messages().
+Each model projection owns its own budget without changing durable evidence.
+See docs/transcript-projection-contract.md before adding record fields.
 """
 
 import json
+from copy import deepcopy
 
 SYSTEM_BASE = (
     "You are an agent completing the user's goal with the tools below. Work in "
@@ -31,36 +29,6 @@ CORE_TOOL_SCHEMAS = [
         "parameters": {"type": "object", "properties": {},
                        "required": []}}},
 ]
-
-_RESULT_CAP = 12000
-_STRING_CAP = 2000
-# correlation IDs and fingerprints are never bounded, whatever the cap
-_ID_KEYS = {"observation_id", "attempt_id", "intent_id", "call_id",
-            "tool_call_id", "idempotency_key",
-            "intent_fingerprint", "observation_fingerprint"}
-
-
-def _bound_strings(value, cap=_STRING_CAP):
-    """Bound every string inside a payload so the serialized envelope stays
-    under the result cap and parseable — truncation happens to evidence
-    strings, never to the JSON envelope or to mandatory correlation IDs."""
-    if isinstance(value, str):
-        if len(value) <= cap:
-            return value
-        return value[:cap] + f"…[truncated {len(value) - cap} chars]"
-    if isinstance(value, dict):
-        return {key: (item if key in _ID_KEYS else _bound_strings(item, cap))
-                for key, item in value.items()}
-    if isinstance(value, list):
-        return [_bound_strings(item, cap) for item in value]
-    return value
-
-
-def _strip_internal(message):
-    return {key: value for key, value in message.items()
-            if not key.startswith("_")}
-
-
 
 def system_prompt(provider, cache_scope=None) -> str:
     lines = []
@@ -113,7 +81,7 @@ def full_tool_schemas(provider) -> list:
 
 
 class Transcript:
-    """Append-only message ledger. `messages()` snapshots are stable prefixes."""
+    """Append-only source; durable and model-facing snapshots are independent."""
 
     def __init__(self, system: str, goal: str):
         self._messages = [
@@ -122,11 +90,14 @@ class Transcript:
         ]
 
     def messages(self) -> list:
-        """Provider-facing view: internal metadata keys never leak."""
-        if not any(key.startswith("_") for message in self._messages
-                   for key in message):
-            return list(self._messages)
-        return [_strip_internal(message) for message in self._messages]
+        """Compatibility alias. New model consumers must use llm_messages()."""
+        return self.llm_messages()
+
+    def llm_messages(self) -> list:
+        """Detached, deterministic LLM projection, never a recovery source."""
+        from .llm_context import project_llm_messages
+
+        return project_llm_messages(self._messages)
 
     def append_action(self, name: str, arguments: dict) -> str:
         """Synthesize an assistant tool-call turn (Jev writes it in the LLM's name)."""
@@ -141,34 +112,9 @@ class Transcript:
         return call_id
 
     def append_result(self, call_id: str, content) -> str:
-        if isinstance(content, str):
-            # a plain string body may be trimmed; it is not a JSON envelope
-            text = content[:_RESULT_CAP]
-        else:
-            text = json.dumps(content, ensure_ascii=False, default=str)
-            cap = _STRING_CAP
-            # bound structurally (halve string caps) until the FULL serialized
-            # envelope fits — never byte-slice serialized JSON, which would
-            # make the projection unparsable
-            while len(text) > _RESULT_CAP and cap >= 64:
-                cap //= 2
-                text = json.dumps(_bound_strings(content, cap),
-                                  ensure_ascii=False, default=str)
-            if len(text) > _RESULT_CAP:
-                # even the omission fallback preserves the mandatory envelope:
-                # disposition/error/ids must survive, only bulky evidence drops
-                fallback = {"result_omitted": True,
-                            "reason": "result exceeded the ledger cap after bounding"}
-                for key in ("status", "action", "exit", "effect_disposition",
-                            "effect_proof", "error", "observation_id", "attempt_id",
-                            "phase", "dispatched", "intent_fingerprint",
-                            "observation_fingerprint", "superseded", "resolved",
-                            "resolution", "continuation", "container_running"):
-                    if isinstance(content, dict) and key in content:
-                        # bound copied values (IDs/fingerprints exempt) so even
-                        # the fallback envelope cannot exceed the cap
-                        fallback[key] = _bound_strings(content[key])
-                text = json.dumps(fallback, ensure_ascii=False, default=str)
+        # Provider capture bounds remain; model display limits belong only to
+        # the independent projections, never this recovery source.
+        text = content if isinstance(content, str) else json.dumps(content, ensure_ascii=False, default=str)
         self._messages.append({"role": "tool", "tool_call_id": call_id,
                                "content": text})
         return text[:200]
@@ -188,7 +134,7 @@ class Transcript:
         never appears in provider-facing messages()."""
         message = {"role": "user", "content": text}
         if meta:
-            message["_runtime_note"] = _bound_strings(meta)
+            message["_runtime_note"] = deepcopy(meta)
         self._messages.append(message)
 
     def unresolved_unknown_calls(self) -> list:
@@ -237,8 +183,8 @@ class Transcript:
 
     def append_assistant(self, message: dict):
         """A genuine LLM-generated turn (the arbitration result) enters history verbatim."""
-        self._messages.append({"role": "assistant", "content": message.get("content"),
-                               "tool_calls": message.get("tool_calls")})
+        self._messages.append(deepcopy({"role": "assistant", "content": message.get("content"),
+                                       "tool_calls": message.get("tool_calls")}))
 
     def repair(self) -> int:
         """Restore the every-tool_call-answered invariant after an interrupted
@@ -271,10 +217,11 @@ class Transcript:
         return inserted
 
     def dump(self) -> list:
-        return self._messages
+        """Detached durable snapshot for persistence and recovery, not models."""
+        return deepcopy(self._messages)
 
     @classmethod
     def from_messages(cls, messages: list) -> "Transcript":
         ledger = cls.__new__(cls)
-        ledger._messages = list(messages)
+        ledger._messages = deepcopy(messages)
         return ledger
