@@ -36,29 +36,33 @@ complete conversation transcript and provider prompt-cache continuity.
 JevLoop is an independent open-source project. It is powered by Jev but is not
 an official TypeSafe product.
 
+## The same request, two agent loops
+
+“Add an endpoint to update data.” In this historical paired run, JevLoop reached
+its answer in **26.4s / 5 steps**, versus **64.1s / 14 steps** for the LLM-only
+agent. Both lanes received the same request and execution profile, with separate
+workspaces and transcripts.
+
+<img src="docs/assets/agent-loop-paired-run.png" alt="Same request, side-by-side execution: JevLoop finishes after 5 steps in 26.4 seconds; the LLM-only agent takes 14 steps and 64.1 seconds. All steps, including one denied JevLoop attempt, are shown." width="100%" />
+
+Compact historical replay using the actual frontend step cards; long command
+and answer bodies are hidden. No steps are omitted. All five JevLoop steps used
+LLM assistance; fewer steps here does not mean LLM-free execution. This is one
+selected turn, not a general performance or correctness claim.
+[Run evidence and capture notes →](docs/assets/README.md)
+
 ## A measured fast path
 
 > One manually driven six-turn FastAPI case. Both lanes answered every turn;
 > this is a scoped observation, not a general benchmark.
 
-<!-- BENCHMARK_RESULTS_START -->
-| Metric | JevLoop (Jev + small LLM) | LLM-only baseline | Observed difference |
-| --- | ---: | ---: | ---: |
-| Total wall time | **103.5s** | 206.7s | **50% faster (2.0×)** |
-| Model calls | 22 Jev + 20 LLM | 52 LLM | 19% fewer total calls |
-| Jev direct pass | 2/22 (9.1%) | — | — |
-| Decision median latency | **1,080ms** | 1,552ms | 30% lower |
-| Jev input / output tokens | 90.1k / 10.8k | — | — |
-| LLM input / output tokens | **247.4k / 9.5k** | 1,394.0k / 23.6k | 82% fewer LLM input tokens |
-| Total input / output tokens | **337.5k / 20.3k** | 1,394.0k / 23.6k | 75% fewer input tokens |
-| Jev estimated cost | $0.003784 | — | — |
-| LLM estimated cost | **$0.037088** | $0.132537 | 72% lower |
-| Estimated total cost | **$0.040872** | $0.132537 | **69% lower (3.2×)** |
-| Runtime steps | **22** | 52 | 58% fewer |
-| Terminal outcome | answered 6/6 | answered 6/6 | both completed |
-<!-- BENCHMARK_RESULTS_END -->
+<img src="docs/assets/fastapi-session-en.svg" alt="Observed six-turn FastAPI session: JevLoop 103.5s and estimated $0.040872 versus LLM-only 206.7s and $0.132537." width="100%" />
 
-[Method, limitations, pricing, and run evidence →](docs/fastapi-case-study.md#english)
+Generated from [public run data](docs/evidence/fastapi-6turn-20260922/summary.json)
+using the dashboard's color palette. This is a static data visualization, not a live dashboard.
+
+[Full metrics, method, limitations, pricing, and run evidence →](docs/fastapi-case-study.md#english)
+· [Regenerate the panels](docs/assets/README.md#summary-panels)
 
 ## Why JevLoop
 

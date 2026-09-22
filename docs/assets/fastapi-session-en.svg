@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="644" viewBox="0 0 1120 644" role="img" aria-labelledby="title desc" lang="en">
+<title id="title">One session. Two execution paths.</title>
+<desc id="desc">One observed case, not a general benchmark. Answered does not mean verified correct.</desc>
+<g font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Arial, Noto Sans CJK SC, Microsoft YaHei, sans-serif">
+<rect x="0.5" y="0.5" width="1119.00" height="643" fill="#faf9f6" stroke="#e3dfd3"/>
+<text x="36" y="38" font-size="15" font-weight="600" fill="#c96442">PAIRED RUN / FASTAPI / 6 TURNS</text>
+<text x="36" y="84" font-size="34" font-weight="600" fill="#141413">One session. Two execution paths.</text>
+<text x="36" y="116" font-size="17" font-weight="400" fill="#6e6b64">Observed results from published run evidence · 22 Sep 2026</text>
+<rect x="36" y="146" width="336.00" height="228" fill="#faf9f6" stroke="#e3dfd3"/>
+<text x="56" y="179" font-size="18" font-weight="400" fill="#6e6b64">Total wall time</text>
+<text x="56" y="222" font-size="34" font-weight="600" fill="#141413">103.5s</text>
+<text x="56" y="252" font-size="18" font-weight="600" fill="#c96442">50% lower</text>
+<text x="56" y="282" font-size="15" font-weight="400" fill="#6e6b64">JevLoop</text>
+<text x="202" y="282" font-size="16" font-weight="400" fill="#141413">103.5s</text>
+<rect x="56" y="291" width="296.00" height="7" fill="#f0eee5"/>
+<rect x="56" y="291" width="148.25" height="7" fill="#c96442"/>
+<text x="56" y="329" font-size="15" font-weight="400" fill="#6e6b64">LLM-only</text>
+<text x="202" y="329" font-size="16" font-weight="400" fill="#141413">206.7s</text>
+<rect x="56" y="338" width="296.00" height="7" fill="#f0eee5"/>
+<rect x="56" y="338" width="296.00" height="7" fill="#6e6b64"/>
+<rect x="392" y="146" width="336.00" height="228" fill="#faf9f6" stroke="#e3dfd3"/>
+<text x="412" y="179" font-size="18" font-weight="400" fill="#6e6b64">Estimated total cost</text>
+<text x="412" y="222" font-size="34" font-weight="600" fill="#141413">$0.040872</text>
+<text x="412" y="252" font-size="18" font-weight="600" fill="#c96442">69% lower</text>
+<text x="412" y="282" font-size="15" font-weight="400" fill="#6e6b64">JevLoop</text>
+<text x="558" y="282" font-size="16" font-weight="400" fill="#141413">$0.040872</text>
+<rect x="412" y="291" width="296.00" height="7" fill="#f0eee5"/>
+<rect x="412" y="291" width="91.28" height="7" fill="#c96442"/>
+<text x="412" y="329" font-size="15" font-weight="400" fill="#6e6b64">LLM-only</text>
+<text x="558" y="329" font-size="16" font-weight="400" fill="#141413">$0.132537</text>
+<rect x="412" y="338" width="296.00" height="7" fill="#f0eee5"/>
+<rect x="412" y="338" width="296.00" height="7" fill="#6e6b64"/>
+<rect x="748" y="146" width="336.00" height="228" fill="#faf9f6" stroke="#e3dfd3"/>
+<text x="768" y="179" font-size="18" font-weight="400" fill="#6e6b64">LLM calls</text>
+<text x="768" y="222" font-size="34" font-weight="600" fill="#141413">20</text>
+<text x="768" y="252" font-size="18" font-weight="600" fill="#c96442">62% lower</text>
+<text x="768" y="282" font-size="15" font-weight="400" fill="#6e6b64">JevLoop</text>
+<text x="914" y="282" font-size="16" font-weight="400" fill="#141413">20</text>
+<rect x="768" y="291" width="296.00" height="7" fill="#f0eee5"/>
+<rect x="768" y="291" width="113.85" height="7" fill="#c96442"/>
+<text x="768" y="329" font-size="15" font-weight="400" fill="#6e6b64">LLM-only</text>
+<text x="914" y="329" font-size="16" font-weight="400" fill="#141413">52</text>
+<rect x="768" y="338" width="296.00" height="7" fill="#f0eee5"/>
+<rect x="768" y="338" width="296.00" height="7" fill="#6e6b64"/>
+<text x="36" y="414" font-size="15" font-weight="600" fill="#6e6b64">WHAT HAPPENED INSIDE THE LOOP</text>
+<text x="36" y="450" font-size="18" font-weight="400" fill="#6e6b64">Model calls</text>
+<text x="36" y="486" font-size="28" font-weight="600" fill="#141413">22 Jev + 20 LLM</text>
+<text x="36" y="515" font-size="16" font-weight="400" fill="#6e6b64">vs 52 LLM-only calls</text>
+<text x="392" y="450" font-size="18" font-weight="400" fill="#6e6b64">Direct Jev steps</text>
+<text x="392" y="486" font-size="28" font-weight="600" fill="#141413">2 / 22</text>
+<text x="392" y="515" font-size="16" font-weight="400" fill="#6e6b64">Jev decisions without an LLM call</text>
+<text x="748" y="450" font-size="18" font-weight="400" fill="#6e6b64">LLM reviews</text>
+<text x="748" y="486" font-size="28" font-weight="600" fill="#141413">12</text>
+<text x="748" y="515" font-size="16" font-weight="400" fill="#6e6b64">3 upheld · 9 overridden</text>
+<rect x="36" y="540" width="1048.00" height="1" fill="#e3dfd3"/>
+<text x="36" y="570" font-size="18" font-weight="600" fill="#141413">Both lanes answered 6/6 turns</text>
+<text x="36" y="598" font-size="16" font-weight="400" fill="#6e6b64">One observed case, not a general benchmark. Answered does not mean verified correct.</text>
+<text x="36" y="625" font-size="14" font-weight="400" fill="#6e6b64">Source: sanitized public summary.json · Static SVG generated from data, not a screenshot</text>
+</g>
+</svg>

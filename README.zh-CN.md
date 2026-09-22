@@ -33,29 +33,31 @@ Prompt Cache。
 
 JevLoop 是独立的开源项目，由 Jev 提供能力，但不是 TypeSafe 官方产品。
 
+## 同一个问题，两条 Agent Loop
+
+“帮我新增一个改数据的接口。”这次历史双线运行中，JevLoop 用 **26.4 秒、5 步**
+完成回答，纯 LLM Agent 用 **64.1 秒、14 步**。两条路径接收相同请求与执行配置，
+工作区和对话账本相互隔离。
+
+<img src="docs/assets/agent-loop-paired-run.png" alt="同一问题的双线执行：左侧 JevLoop 26.4 秒、5 步；右侧纯 LLM Agent 64.1 秒、14 步。展示全部步骤，包括 JevLoop 一次被拦截的尝试。" width="100%" />
+
+截图使用真实前端步骤卡片制作紧凑历史回放，收起长命令与回答正文，没有省略步骤。
+本轮 JevLoop 的 5 步均使用了 LLM 辅助，步骤更少不代表完全不调用 LLM。
+这是选取的一轮观测，不代表普遍性能或正确性结论。
+[运行证据与截图说明 →](docs/assets/README.md)
+
 ## 一条经过实测的快速路径
 
 > 一次手工驱动的六轮 FastAPI Case。两条 lane 均完成并回答全部 turn；
 > 这是一个范围明确的观测结果，不是普遍性能结论。
 
-<!-- BENCHMARK_RESULTS_START -->
-| 指标 | JevLoop（Jev + 小 LLM） | 纯 LLM Baseline | 本次观测差异 |
-| --- | ---: | ---: | ---: |
-| 总 Wall time | **103.5s** | 206.7s | **快 50%（2.0×）** |
-| 模型调用 | 22 Jev + 20 LLM | 52 LLM | 总调用少 19% |
-| Jev 直通 | 2/22（9.1%） | — | — |
-| 决策延迟中位数 | **1,080ms** | 1,552ms | 低 30% |
-| Jev 输入 / 输出 Token | 90.1k / 10.8k | — | — |
-| LLM 输入 / 输出 Token | **247.4k / 9.5k** | 1,394.0k / 23.6k | LLM 输入 Token 少 82% |
-| 总输入 / 输出 Token | **337.5k / 20.3k** | 1,394.0k / 23.6k | 输入 Token 少 75% |
-| Jev 预估成本 | $0.003784 | — | — |
-| LLM 预估成本 | **$0.037088** | $0.132537 | 低 72% |
-| 预估总成本 | **$0.040872** | $0.132537 | **低 69%（3.2×）** |
-| Runtime Steps | **22** | 52 | 少 58% |
-| 终态 | 6/6 已回答 | 6/6 已回答 | 双方均完成 |
-<!-- BENCHMARK_RESULTS_END -->
+<img src="docs/assets/fastapi-session-zh-CN.svg" alt="六轮 FastAPI 观测结果：JevLoop 耗时 103.5s、预估成本 $0.040872；纯 LLM 耗时 206.7s、预估成本 $0.132537。" width="100%" />
 
-[实验方法、限制、计价与 Run 证据 →](docs/fastapi-case-study.md#中文)
+基于[公开运行数据](docs/evidence/fastapi-6turn-20260922/summary.json)生成，
+复用前端面板配色。这是静态数据可视化，不是实时仪表盘。
+
+[完整指标、实验方法、限制、计价与 Run 证据 →](docs/fastapi-case-study.md#中文)
+· [重新生成面板](docs/assets/README.md#summary-panels)
 
 ## 为什么是 JevLoop
 
