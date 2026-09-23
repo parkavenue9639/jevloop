@@ -10,9 +10,10 @@ import json
 
 import pytest
 
-from jevloop import bench, sessions
-from jevloop.drivers import DriverProposal
-from jevloop.tools.base import ToolSpec
+from jevloop.contracts.tools import ToolSpec
+from jevloop.decision.drivers import DriverProposal
+from jevloop.evaluation import bench
+from jevloop.storage import sessions
 
 # --- loader ---------------------------------------------------------------
 
@@ -72,6 +73,15 @@ def _turn(**kwargs):
 def test_check_answer_substring_case_insensitive():
     checks = bench._check_answer(_turn(contains=["Done"]), "  it is DONE. ")
     assert checks == [{"name": "answer contains 'Done'", "ok": True}]
+
+
+def test_parameter_authoring_is_counted_separately_in_lane_totals():
+    totals = bench._lane_totals([{"metrics": {"helper": {"by_kind": {
+        "parameter_authoring": {"calls": 3}, "authoring": {"calls": 1},
+        "arbitration": {"calls": 2}}}}}])
+    assert totals["parameter_authoring_calls"] == 3
+    assert totals["authoring_calls"] == 1
+    assert totals["arbitration_calls"] == 2
 
 
 def test_check_answer_max_chars_and_any():
@@ -292,7 +302,7 @@ def test_run_suite_pairs_lanes_persists_ledgers_and_cleans_volumes(tmp_path):
 def test_run_suite_journals_turns_into_runstore_history(tmp_path):
     """Bench turns land in the dashboard's run history, replayable as paired
     conversations: one run file per turn holding both lanes' events."""
-    from jevloop import runstore as runstore_module
+    from jevloop.storage import runstore as runstore_module
 
     suite_path = _suite_file(tmp_path)
     ctx, _containers, _volumes = _fake_context(tmp_path, {

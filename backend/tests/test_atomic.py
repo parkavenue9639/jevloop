@@ -10,9 +10,9 @@ from itertools import pairwise
 
 import pytest
 
-from jevloop.state import Workspace
+from jevloop.context.state import Workspace
+from jevloop.contracts.tools import ToolContext, write_actions
 from jevloop.tools import sandbox
-from jevloop.tools.base import ToolContext, write_actions
 from jevloop.tools.sandbox import (
     DockerSandboxContainer,
     DockerSandboxImage,
@@ -469,7 +469,7 @@ def test_spec_only_mount_advertises_but_refuses_execution():
     tools = SandboxTools()  # runtime=None: catalog/compilation only
     assert {s.name for s in tools.specs()} >= {"LIST_FILES", "READ_FILE",
                                                "WRITE_FILE", "BASH"}
-    assert tools.available(Workspace()) == {"LIST_FILES", "WRITE_FILE", "BASH"}
+    assert tools.available(Workspace()) == {"LIST_FILES", "READ_FILE", "SEARCH_FILES", "WRITE_FILE", "BASH"}
     with pytest.raises(RuntimeError, match="injected sandbox runtime"):
         asyncio.run(tools.execute("WRITE_FILE", ToolContext(
             workspace=Workspace(), text="x.md\nhello")))

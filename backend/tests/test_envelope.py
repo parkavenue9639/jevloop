@@ -5,8 +5,8 @@ import json
 
 import pytest
 
-from jevloop.adapter import lark_cli
-from jevloop.adapter.lark_cli import ConfirmationRequired, LarkCliError, run
+from jevloop.tools.adapter import lark_cli
+from jevloop.tools.adapter.lark_cli import ConfirmationRequired, LarkCliError, run
 
 
 class FakeProc:

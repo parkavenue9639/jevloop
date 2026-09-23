@@ -14,15 +14,17 @@ for real inside the container.
 
 import asyncio
 import hashlib
+import json
 import re
 import shutil
 import tempfile
 import uuid
 from pathlib import Path
 
-from .base import ToolContext, ToolSpec
+from jevloop.contracts.tools import ToolContext, ToolSpec
+from jevloop.paths import BACKEND_ROOT
 
-DOCKER_DIR = Path(__file__).resolve().parents[2] / "docker" / "sandbox"
+DOCKER_DIR = BACKEND_ROOT / "docker" / "sandbox"
 DEFAULT_SEED = DOCKER_DIR / "seed"
 IMAGE_PREFIX = "jevloop-sandbox"
 
@@ -46,38 +48,92 @@ BASH_TEXT = (
     "select processes: those patterns can match the current command itself."
 )
 
+PATH_SCHEMA = {"type": "string", "minLength": 1, "maxLength": 512,
+               "description": "Sandbox-relative path; no absolute paths or parent traversal."}
+
+
+def parameters(properties, required):
+    return {"type": "object", "properties": properties, "required": required,
+            "additionalProperties": False}
+
+
+def validate_arguments(name, arguments):
+    """Validate again at the provider boundary, without consulting task text."""
+    from jsonschema import validate
+
+    spec = next(spec for spec in SPECS if spec.name == name)
+    validate(arguments, spec.parameters)
+    args = {**(spec.binding_defaults or {}), **arguments}
+    paths = args.get("path", [])
+    if "path" in args:
+        args["path"] = ([validate_relpath(path) for path in paths] if isinstance(paths, list)
+                        else validate_relpath(paths))
+        if isinstance(args["path"], list) and len(set(args["path"])) != len(args["path"]):
+            raise ValueError("READ_FILE requires unique normalized paths")
+    if name == "SEARCH_FILES":
+        try:
+            re.compile(args["pattern"])
+        except re.error as error:
+            raise ValueError(f"invalid_regex: {error}") from error
+    if name == "BASH" and not args["command"].strip():
+        raise ValueError("empty command")
+    return args
+
+
 SPECS = [
     ToolSpec(
         name="LIST_FILES",
-        description="List the files currently in the sandbox. Use when the set "
-                    "of files is uncertain (before reading or overwriting) or to "
-                    "confirm what a run created. File contents are not included "
-                    "— that is READ_FILE.",
+        observation_kinds=("file", "directory"),
+        description="List one sandbox directory, including file and directory references. "
+                    "Use path, offset and limit for scoped discovery and pagination; not recursive.",
         phases=("INSPECT", "VERIFY"),
+        target_pool="directories", target_parameter="path",
+        binding_defaults={"path": ".", "offset": 0, "limit": 100},
+        parameters=parameters({"path": PATH_SCHEMA,
+                               "offset": {"type": "integer", "minimum": 0, "maximum": 2000},
+                               "limit": {"type": "integer", "minimum": 1, "maximum": 200}}, []),
+        argument_validator=lambda args: validate_arguments("LIST_FILES", args),
     ),
     ToolSpec(
         name="READ_FILE",
-        description="Read one or several known files into context. Select several "
-                    "only when each file is independently relevant now. Prefer "
-                    "files not yet read in this turn and files changed since their "
-                    "last read. For command output use BASH; for discovery use "
-                    "LIST_FILES.",
-        needs_target=True, target_pool="files", multi_target_max=4,
+        observation_kinds=("file", "directory"),
+        description="Read a sandbox path or up to four paths; offset is a zero-based line "
+                    "number and limit counts lines, with an aggregate character cap. "
+                    "Paths may be authored directly even without prior observations.",
+        target_pool="files", target_parameter="path", multi_target_max=4,
+        binding_defaults={"offset": 0, "limit": 200},
+        parameters=parameters({"path": {"oneOf": [PATH_SCHEMA,
+                    {"type": "array", "items": PATH_SCHEMA, "minItems": 1,
+                     "maxItems": 4, "uniqueItems": True}]},
+                    "offset": {"type": "integer", "minimum": 0, "maximum": 100000},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": 1000}}, ["path"]),
+        argument_validator=lambda args: validate_arguments("READ_FILE", args),
+        phases=("INSPECT", "VERIFY"),
+    ),
+    ToolSpec(
+        name="SEARCH_FILES",
+        observation_kinds=("file", "directory"),
+        description="Search file contents under a sandbox path with a regular expression and "
+                    "optional filename glob; returns bounded file references and line snippets. "
+                    "Invalid regex and exhausted scan budgets are reported explicitly.",
+        target_pool="directories", target_parameter="path",
+        binding_defaults={"path": ".", "glob": "*", "limit": 20},
+        parameters=parameters({"path": PATH_SCHEMA,
+                               "pattern": {"type": "string", "minLength": 1, "maxLength": 256},
+                               "glob": {"type": "string", "minLength": 1, "maxLength": 256},
+                               "limit": {"type": "integer", "minimum": 1, "maximum": 100}}, ["pattern"]),
+        argument_validator=lambda args: validate_arguments("SEARCH_FILES", args),
         phases=("INSPECT", "VERIFY"),
     ),
     ToolSpec(
         name="WRITE_FILE",
-        description="Create or replace one file with content that can be "
-                    "authored directly: notes, drafts, data, deliverables. "
-                    "Target an existing file to overwrite it, or NEW to create "
-                    "one (the new name is written as the content's first line). "
-                    "Not for programmatically produced output — generated files, "
-                    "formatters and many-file scripts belong to BASH. One file "
-                    "per step; when the goal also asks to report or tell, finish "
-                    "with ANSWER after persisting instead of writing more.",
-        needs_target=True, target_pool="files",
-        target_extra=(("NEW", ("create a new file; its name is the first line "
-                               "of the written content")),),
+        observation_kinds=("file", "directory"),
+        description="Create or replace a sandbox file using separate path and content "
+                    "arguments; paths may include subdirectories and need not already exist.",
+        target_pool="files", target_parameter="path",
+        parameters=parameters({"path": PATH_SCHEMA,
+                               "content": {"type": "string", "maxLength": 20000}}, ["path", "content"]),
+        argument_validator=lambda args: validate_arguments("WRITE_FILE", args),
         needs_text=True, text_instruction=WRITE_TEXT,
         phases=("ACT",),
         consumes=("goal", "messages", "doc", "notes"), mutates_workspace=True,
@@ -92,6 +148,9 @@ SPECS = [
                     "write content you could author (WRITE_FILE) or to pull one "
                     "file into context (READ_FILE).",
         needs_text=True, text_instruction=BASH_TEXT,
+        parameters=parameters({"command": {"type": "string", "minLength": 1,
+                                           "maxLength": 20000}}, ["command"]),
+        argument_validator=lambda args: validate_arguments("BASH", args),
         consumes=("goal", "messages", "doc", "notes"), mutates_workspace=True,
         phases=("INSPECT", "ACT", "VERIFY"),
     ),
@@ -113,13 +172,13 @@ def validate_relpath(name: str) -> str:
     """Lexical confinement, enforced before any Docker invocation: relative,
     no parent hops, no absolute or empty names. The in-container helper
     re-checks (symlink-aware) as defense in depth."""
-    if not name or "\x00" in name:
+    if not isinstance(name, str) or not name or len(name) > 512 or any(ord(c) < 32 for c in name):
         raise ValueError(f"invalid sandbox path: {name!r}")
-    if name.startswith(("/", "\\")):
+    if name.startswith("/") or "\\" in name:
         raise ValueError(f"path escapes the sandbox: {name}")
     if ".." in name.split("/"):
         raise ValueError(f"path escapes the sandbox: {name}")
-    return name
+    return "/".join(part for part in name.split("/") if part not in {"", "."}) or "."
 
 
 async def _run(argv, *, stdin: bytes | None = None,
@@ -292,6 +351,29 @@ class DockerSandboxContainer:
         return await _run([*argv, self.name, *argv_tail], stdin=stdin, timeout=timeout)
 
     # -- file / shell surface -------------------------------------------------
+    async def _file_query(self, operation: str, arguments: dict) -> dict:
+        code, out, err = await self._exec(
+            ["sandboxfs", operation, json.dumps(arguments)], timeout=10)
+        if code != 0:
+            raise RuntimeError(f"sandboxfs {operation} failed (exit {code}): "
+                               f"{err.decode(errors='replace')[:200]}")
+        result = json.loads(out)
+        if not isinstance(result, dict):
+            raise TypeError("sandboxfs returned a non-object result")
+        return result
+
+    async def list_entries(self, path=".", offset=0, limit=100) -> dict:
+        return await self._file_query("list-page", {
+            "name": validate_relpath(path), "offset": offset, "limit": limit})
+
+    async def read_range(self, path, offset=0, limit=200) -> dict:
+        return await self._file_query("read-range", {
+            "name": validate_relpath(path), "offset": offset, "limit": limit})
+
+    async def search_files(self, path=".", pattern="", glob="*", limit=20) -> dict:
+        return await self._file_query("search", {
+            "name": validate_relpath(path), "pattern": pattern, "glob": glob, "limit": limit})
+
     async def list_files(self) -> list[str]:
         code, out, err = await self._exec(["sandboxfs", "list"])
         if code != 0:
@@ -364,6 +446,8 @@ class DockerSandboxContainer:
             "exit": code,
             "output": (out + err).decode(errors="replace")[:OUTPUT_CAP],
         }
+        if len(out + err) >= OUTPUT_CAP:
+            result["truncated"] = True
         if code != 0:
             result["container_running"] = await self.is_running()
         return result
@@ -400,32 +484,154 @@ class SandboxTools:
         return SPECS
 
     def available(self, workspace):
-        valid = {"LIST_FILES", "WRITE_FILE", "BASH"}
-        if workspace.files:
-            valid.add("READ_FILE")
-        return valid
+        return {spec.name for spec in SPECS}
 
     async def execute(self, name: str, ctx: ToolContext) -> dict:
-        if name not in {"LIST_FILES", "READ_FILE", "WRITE_FILE", "BASH"}:
+        if name not in {spec.name for spec in SPECS}:
             raise KeyError(f"unknown tool {name}")
         if self._runtime is None:
             raise RuntimeError("SandboxTools needs an injected sandbox runtime "
                                "(start a DockerSandboxContainer and pass it in)")
         workspace = ctx.workspace
+        if ctx.arguments is not None:
+            from jsonschema import ValidationError
+
+            try:
+                args = validate_arguments(name, ctx.arguments)
+            except (ValueError, TypeError, ValidationError) as error:
+                return {"status": "failed", "reason": str(error)[:500],
+                        "effect_disposition": "NOT_APPLIED", "effect_proof": "pre_effect"}
+            if name == "LIST_FILES":
+                return await self._list_page(workspace, args)
+            if name == "READ_FILE":
+                return await self._read_ranges(workspace, args)
+            if name == "SEARCH_FILES":
+                return await self._search(workspace, args)
+            if name == "WRITE_FILE":
+                await self._runtime.write_file(args["path"], args["content"])
+                workspace.files[args["path"]] = args["path"]
+                return {"status": "ready", "action": f"write_file({args['path']}, {len(args['content'])} chars)",
+                        "changed_files": [args["path"]],
+                        "observation": self._observation(args["path"], "File written.",
+                                                         [("file", args["path"])], False)}
+            return await self._bash(workspace, ctx, args["command"])
         if name == "LIST_FILES":
             return await self._list_files(workspace)
         if name == "READ_FILE":
             return await self._read_file(workspace, ctx.target)
         if name == "WRITE_FILE":
             return await self._write_file(ctx)
+        if name == "SEARCH_FILES":
+            raise ValueError("SEARCH_FILES requires canonical arguments")
         return await self._bash(workspace, ctx)
+
+    @staticmethod
+    def _observation(scope, evidence, references, truncated, **metadata):
+        refs, seen = [], set()
+        rejected = 0
+        for kind, value in references:
+            if kind not in {"file", "directory"} or (kind, value) in seen:
+                continue
+            try:
+                value = validate_relpath(value)
+            except ValueError:
+                rejected += 1
+                continue  # unbindable names remain evidence, never become bindings
+            seen.add((kind, value))
+            if len(refs) < 20:
+                refs.append({"kind": kind, "value": value, "label": value})
+        return {"scope": scope, "evidence": evidence[:READ_CAP], "references": refs,
+                "truncated": bool(truncated or len(evidence) > READ_CAP or len(seen) > 20 or rejected),
+                "references_truncated": len(seen) > 20, "references_rejected": rejected, **metadata}
+
+    @staticmethod
+    def _query_error(result, scope):
+        reason = result.get("reason", "sandbox query failed")
+        return {"status": "blocked" if result.get("error") == "FileNotFoundError" else "failed",
+                "reason": reason, "provider_error": result.get("error"),
+                "observation": {"scope": scope, "evidence": reason[:500], "references": [],
+                                "truncated": bool(result.get("truncated", False))}}
+
+    async def _list_page(self, workspace, args):
+        result = await self._runtime.list_entries(**args)
+        if result.get("status") == "error":
+            return self._query_error(result, args["path"])
+        entries = result.get("entries", [])[:args["limit"]]
+        refs = [(entry["kind"], entry["path"]) for entry in entries]
+        evidence = "\n".join(f"{entry['kind']}: {entry['path']}" for entry in entries)
+        observation = self._observation(args["path"], evidence, refs, result.get("truncated", False),
+                                        offset=args["offset"], limit=args["limit"],
+                                        next_offset=result.get("next_offset"),
+                                        scan_truncated=result.get("scan_truncated", False))
+        for reference in observation["references"]:
+            if reference["kind"] == "file":
+                workspace.files[reference["value"]] = reference["value"]
+        return {"status": "ready", "action": f"list_files({len(entries)})", "observation": observation}
+
+    async def _search(self, workspace, args):
+        result = await self._runtime.search_files(**args)
+        if result.get("status") == "error":
+            return self._query_error(result, args["path"])
+        matches = result.get("matches", [])[:args["limit"]]
+        evidence = "\n".join(f"{hit['path']}:{hit['line']}: {hit['snippet']}" for hit in matches)
+        observation = self._observation(
+            args["path"], evidence or "No matches within the scanned scope.",
+            [("file", hit["path"]) for hit in matches], result.get("truncated", False),
+            pattern=args["pattern"], glob=args["glob"], limit=args["limit"],
+            scanned_files=result.get("scanned_files", 0), scanned_bytes=result.get("scanned_bytes", 0),
+            skipped_files=result.get("skipped_files", 0))
+        for ref in observation["references"]:
+            workspace.files[ref["value"]] = ref["value"]
+        return {"status": "ready", "action": f"search_files({len(matches)} matches)",
+                "matches": matches, "observation": observation}
+
+    async def _read_ranges(self, workspace, args):
+        paths = args["path"] if isinstance(args["path"], list) else [args["path"]]
+        remaining = READ_CAP if len(paths) == 1 else MULTI_READ_CAP
+        results, refs, evidence = [], [], []
+        truncated = False
+        for path in paths:
+            if remaining <= 0:
+                results.append({"target": path, "status": "omitted", "truncated": True})
+                truncated = True
+                continue
+            result = await self._runtime.read_range(path, offset=args["offset"], limit=args["limit"])
+            if result.get("status") == "error":
+                results.append({"target": path, "status": "missing" if result.get("error") ==
+                                "FileNotFoundError" else "failed", "reason": result.get("reason", "read failed")})
+                evidence.append(f"{path}: {result.get('reason', 'read failed')}")
+                continue
+            content = result["content"][:remaining]
+            remaining -= len(content)
+            cut = len(content) < len(result["content"]) or result.get("truncated", False)
+            truncated |= cut
+            results.append({"target": path, "status": "ready", "content": content,
+                            "returned_chars": len(content), "offset": args["offset"],
+                            "limit": args["limit"], "unit": "lines", "truncated": cut,
+                            "line_truncated": result.get("line_truncated", False)
+                            or len(content) < len(result["content"]),
+                            "next_offset": result.get("next_offset")
+                            if len(content) == len(result["content"]) else None})
+            refs.append(("file", path))
+            evidence.append(f"[file: {path}; line offset: {args['offset']}]\n{content}")
+            workspace.files[path] = path
+            workspace.notes.append({"kind": "file", "target": path, "text": evidence[-1]})
+        return {"status": "ready" if refs else "blocked", "action": f"read_file({len(refs)} files)",
+                "file_results": results, "read_files": [path for _, path in refs],
+                "partial": len(refs) != len(paths),
+                "observation": self._observation(
+                    ", ".join(paths), "\n".join(evidence), refs, truncated,
+                    offset=args["offset"], limit=args["limit"], unit="lines")}
 
     # -- files ---------------------------------------------------------------
     async def _list_files(self, workspace):
-        rels = (await self._runtime.list_files())[:LIST_CAP]
+        raw = await self._runtime.list_files()
+        rels = raw[:LIST_CAP]
         for rel in rels:
             workspace.files[rel] = rel
-        return {"status": "ready", "action": f"list_files({len(rels)})"}
+        return {"status": "ready", "action": f"list_files({len(rels)})",
+                "observation": self._observation(".", "\n".join(rels),
+                    [("file", path) for path in rels], len(raw) > LIST_CAP)}
 
     async def _read_file(self, workspace, target):
         targets = tuple(target) if isinstance(target, (list, tuple)) else (target,)
@@ -485,12 +691,15 @@ class SandboxTools:
             "file_results": results,
             "read_files": read_files,
             "partial": len(read_files) != len(targets),
+            "observation": self._observation(
+                ", ".join(targets), "\n".join(item.get("content", "") for item in results),
+                [("file", path) for path in read_files], any(item.get("truncated") for item in results)),
         }
 
     async def _write_file(self, ctx):
         lines = ctx.text.splitlines()
         if ctx.target and ctx.target != "NEW":
-            filename = Path(ctx.target).name
+            filename = validate_relpath(ctx.target)
             content = ctx.text
         else:
             candidate = lines[0].strip() if lines else ""
@@ -512,11 +721,12 @@ class SandboxTools:
             "status": "ready",
             "action": f"write_file({filename}, {len(content)} chars)",
             "changed_files": [filename],
+            "observation": self._observation(filename, "File written.", [("file", filename)], False),
         }
 
     # -- shell ----------------------------------------------------------------
-    async def _bash(self, workspace, ctx):
-        command = (ctx.text or "").strip()
+    async def _bash(self, workspace, ctx, command=None):
+        command = (ctx.text or "").strip() if command is None else command
         if not command:
             return {
                 "status": "failed",
@@ -537,6 +747,8 @@ class SandboxTools:
             "action": f"bash({command!r})",
             "exit": result["exit"],
             "files_may_have_changed": True,
+            "observation": self._observation(".", output, [], result.get("truncated", False)
+                                             or len(result.get("output", "")) > OUTPUT_CAP),
         }
         if result["exit"] is None:
             outcome["reason"] = output or "command timed out"

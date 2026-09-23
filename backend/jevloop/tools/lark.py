@@ -4,7 +4,7 @@ Wraps the LarkAdapter transport layer; owns the tool catalog, validity gating an
 execution merging. The framework core never imports anything lark-specific.
 """
 
-from .base import ToolContext, ToolSpec
+from jevloop.contracts.tools import ToolContext, ToolSpec
 
 SEARCH_TEXT = ("Return a short keyword string to search for, derived from the goal; "
                "or null only if no keyword can possibly be inferred.")
@@ -83,7 +83,7 @@ _SPEC_BY_NAME = {spec.name: spec for spec in SPECS}
 
 
 def _docref_from_create(data, title):
-    from ..state import DocRef
+    from jevloop.context.state import DocRef
 
     def walk(node):
         if isinstance(node, dict):
@@ -117,14 +117,9 @@ class LarkTools:
         return SPECS
 
     def available(self, workspace):
-        valid = {"LIST_CHATS", "SEARCH_CHATS", "SEARCH_DOCS"}
-        if workspace.chats:
-            valid.update({"OPEN_CHAT", "REPLY_MESSAGE"})
-        if workspace.recipients:
-            valid.add("SEND_MESSAGE")
-        if workspace.docs:
-            valid.update({"WRITE_DOC", "OPEN_DOC"})
-        return valid
+        # Lack of observed bindings does not hide a tool. Closed references
+        # and recipient authorization are still checked before dispatch.
+        return {spec.name for spec in SPECS}
 
     async def execute(self, name, ctx: ToolContext) -> dict:
         workspace, target, text = ctx.workspace, ctx.target, ctx.text

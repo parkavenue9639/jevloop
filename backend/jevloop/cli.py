@@ -6,20 +6,16 @@ import os
 import sys
 import uuid
 from datetime import datetime
-from pathlib import Path
 
-from .config import (
-    DEFAULT_AMBIGUITY_GATE,
-    DEFAULT_ANSWER_PROGRESS_FLOOR,
-    DEFAULT_ESCALATE_THRESHOLD,
-)
+from jevloop.config import DEFAULT_AMBIGUITY_GATE, DEFAULT_ANSWER_PROGRESS_FLOOR, DEFAULT_ESCALATE_THRESHOLD
+from jevloop.paths import BACKEND_ROOT
 
 ENV_KEYS = ("TYPESAFE_API_KEY", "DEEPSEEK_API_KEY")
 
 
 def load_env_file():
     """Load a project .env (backend/ first, repo root as fallback) without overriding env."""
-    here = Path(__file__).resolve().parent.parent
+    here = BACKEND_ROOT
     for path in (here / ".env", here.parent / ".env"):
         try:
             lines = path.read_text().splitlines() if path.is_file() else None
@@ -120,11 +116,11 @@ def cmd_run(args):
 
     import asyncio
 
-    from . import runstore
-    from .drivers import JevDriver
-    from .guardrails import WritePolicy
-    from .kernel import RuntimeKernel
-    from .tools.sandbox import DockerSandboxContainer, DockerSandboxImage, SandboxTools
+    from jevloop.contracts.policy import WritePolicy
+    from jevloop.decision.drivers import JevDriver
+    from jevloop.runtime.kernel import RuntimeKernel
+    from jevloop.storage import runstore
+    from jevloop.tools.sandbox import DockerSandboxContainer, DockerSandboxImage, SandboxTools
 
     async def _run():
         run_id = uuid.uuid4().hex[:12]
@@ -192,7 +188,7 @@ def cmd_run(args):
     asyncio.run(_run())
 
 def cmd_smoke():
-    from .smoke import main as run_smoke
+    from jevloop.evaluation.smoke import main as run_smoke
 
     print(json.dumps(run_smoke(), ensure_ascii=False, default=str))
 
@@ -201,7 +197,7 @@ def cmd_bench(args):
     import asyncio
     from pathlib import Path
 
-    from . import bench
+    from jevloop.evaluation import bench
 
     load_env_file()
     suite_path = Path(args.scenarios or bench.DEFAULT_SCENARIOS)
@@ -288,7 +284,7 @@ def cmd_bench(args):
 
 def cmd_serve(args):
     load_env_file()
-    from .server import serve
+    from jevloop.apps.server import serve
 
     serve(host=args.host, port=args.port)
 

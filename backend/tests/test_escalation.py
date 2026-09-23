@@ -4,10 +4,10 @@ parsing/validation, pair recording, and transcript prefix stability."""
 import asyncio
 import json
 
-from jevloop.escalation import arbitrate, should_escalate
-from jevloop.metrics import RunMetrics
+from jevloop.context.transcript import Transcript, system_prompt
+from jevloop.decision.escalation import arbitrate, should_escalate
+from jevloop.runtime.metrics import RunMetrics
 from jevloop.tools.sandbox import SandboxTools
-from jevloop.transcript import Transcript, system_prompt
 
 
 def decision(confidence=0.4):
@@ -30,8 +30,10 @@ def _fake_post(message):
     return post
 
 
-def _tool_call_message(name, target=None, content=None):
+def _tool_call_message(name, target=None, content=None, path=None):
     args = {}
+    if path is not None:
+        args["path"] = path
     if target:
         args["target"] = target
     if content is not None:
@@ -70,7 +72,7 @@ def test_should_escalate_requires_ambiguity_when_gated():
 
 
 def test_note_text_carries_meta_signals():
-    from jevloop.escalation import _note_text
+    from jevloop.decision.escalation import _note_text
 
     note = _note_text({**decision(0.4), "ambiguity": 0.81,
                        "progress": {"score": 1.2, "confidence": 0.4}})
@@ -82,7 +84,7 @@ def test_arbitrate_accepts_tool_call_pick_with_content():
     t = make_transcript()
     verdict = asyncio.run(arbitrate(
         t, decision(), SandboxTools(), {"WRITE_FILE", "DONE", "ANSWER"},
-        post=_fake_post(_tool_call_message("WRITE_FILE", content="# body"))))
+        post=_fake_post(_tool_call_message("WRITE_FILE", path="notes.md", content="# body"))))
     assert verdict["valid"] is True
     assert verdict["action"] == "WRITE_FILE"
     assert verdict["content"] == "# body"
@@ -92,7 +94,7 @@ def test_arbitrate_accepts_tool_call_pick_with_content():
     assert [m["role"] for m in t.messages()] == ["system", "user"]
 
 
-def test_arbitration_schema_scopes_targets_to_jev_candidates():
+def test_arbitration_schema_preserves_open_paths_beyond_jev_candidates():
     captured = {}
     routed = {
         **decision(),
@@ -112,7 +114,7 @@ def test_arbitration_schema_scopes_targets_to_jev_candidates():
         captured.update(body)
         return {
             "choices": [{"message": _tool_call_message(
-                "READ_FILE", target="main.py")}],
+                "READ_FILE", path="not-yet-observed.py")}],
             "usage": {},
         }
 
@@ -129,8 +131,8 @@ def test_arbitration_schema_scopes_targets_to_jev_candidates():
         if tool["function"]["name"] == "READ_FILE"
     )
     properties = read_schema["function"]["parameters"]["properties"]
-    assert properties["target"]["enum"] == ["main.py", "store.py"]
-    assert properties["targets"]["items"]["enum"] == ["main.py", "store.py"]
+    assert "enum" not in properties["path"]["oneOf"][0]
+    assert verdict["arguments"]["path"] == "not-yet-observed.py"
     assert verdict["valid"] is True
 
 

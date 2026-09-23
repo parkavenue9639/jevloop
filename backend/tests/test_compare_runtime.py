@@ -6,14 +6,14 @@ from typing import ClassVar
 
 import pytest
 
-from jevloop import server
+from jevloop.apps import server
+from jevloop.apps.server import Dashboard, RunState
 from jevloop.cli import build_parser
-from jevloop.drivers import PlainLlmDriver
-from jevloop.guardrails import WritePolicy
-from jevloop.kernel import RuntimeKernel
-from jevloop.server import Dashboard, RunState
-from jevloop.state import Workspace
-from jevloop.tools.base import ToolSpec
+from jevloop.context.state import Workspace
+from jevloop.contracts.policy import WritePolicy
+from jevloop.contracts.tools import ToolSpec
+from jevloop.decision.drivers import PlainLlmDriver
+from jevloop.runtime.kernel import RuntimeKernel
 
 
 class FakeImage:

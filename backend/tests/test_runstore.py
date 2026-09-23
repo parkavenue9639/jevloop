@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from jevloop import runstore
+from jevloop.storage import runstore
 
 
 def test_runstore_roundtrip(tmp_path, monkeypatch):

@@ -2,7 +2,7 @@
 
 import pytest
 
-from jevloop.guardrails import Budget, BudgetDenied, GuardrailDenied, WritePolicy, review
+from jevloop.contracts.policy import Budget, BudgetDenied, GuardrailDenied, WritePolicy, review
 
 WRITES = {"SEND_MESSAGE", "REPLY_MESSAGE", "CREATE_DOC", "WRITE_DOC"}
 GATED = {"SEND_MESSAGE", "REPLY_MESSAGE"}

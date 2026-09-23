@@ -29,7 +29,7 @@ runs. Text, cards, and labels are SVG elements, not embedded bitmaps or HTML.
 
 The [public trace](../evidence/fastapi-6turn-20260922/trace.jsonl) preserves
 operations, ordering, timings, denial and routing metrics; content is redacted.
-See the [case study](../fastapi-case-study.md) for methodology and full metrics.
+See the [case study](../evaluation/fastapi-case-study.md) for methodology and full metrics.
 
 Regenerate and check without third-party dependencies:
 

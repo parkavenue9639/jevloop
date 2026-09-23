@@ -13,11 +13,11 @@ import asyncio
 import json
 import time
 
-from jevloop.adapter.lark_cli import LarkAdapter
 from jevloop.cli import load_env_file
-from jevloop.drivers import JevDriver
-from jevloop.guardrails import WritePolicy
-from jevloop.kernel import RuntimeKernel
+from jevloop.contracts.policy import WritePolicy
+from jevloop.decision.drivers import JevDriver
+from jevloop.runtime.kernel import RuntimeKernel
+from jevloop.tools.adapter.lark_cli import LarkAdapter
 from jevloop.tools.lark import LarkTools
 
 

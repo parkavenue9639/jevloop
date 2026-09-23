@@ -2,7 +2,7 @@
 
 import pytest
 
-from jevloop.model import validate_choice
+from jevloop.decision.model import validate_choice
 
 IDS = {"search": "Search", "open": "Open", "done": "Done"}
 
