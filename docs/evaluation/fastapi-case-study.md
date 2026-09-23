@@ -1,5 +1,9 @@
 # FastAPI Paired Session Case Study
 
+> Published historical sample, 2026-09-22. Preserved as the source of the README
+> visuals, not a measurement of the latest runtime. See the
+> [evaluation index](README.md) for later branch experiments.
+
 [English](#english) · [中文](#中文)
 
 ## English
@@ -88,7 +92,7 @@ Runs, in order:
 Stored dashboard runs can be replayed without issuing new model calls.
 
 A content-redacted evidence bundle is committed at
-[`docs/evidence/fastapi-6turn-20260922/`](evidence/fastapi-6turn-20260922/).
+[`docs/evidence/fastapi-6turn-20260922/`](../evidence/fastapi-6turn-20260922/).
 It retains event ordering, relative timing, routing, usage, cost, and
 intent/effect fingerprints. Prompts, responses, tool content, recipients, and
 cache-scope identifiers are removed. `manifest.json` records SHA256 hashes for
@@ -186,7 +190,7 @@ Session：`3b6792da363e`
 已保存的 Dashboard Run 可以在不产生新模型调用的情况下回放。
 
 仓库中已固化一份
-[`docs/evidence/fastapi-6turn-20260922/`](evidence/fastapi-6turn-20260922/)
+[`docs/evidence/fastapi-6turn-20260922/`](../evidence/fastapi-6turn-20260922/)
 脱敏证据包。它保留事件顺序、相对时间、路由、用量、成本及 intent/effect
 指纹；Prompt、响应正文、工具内容、收件人和 Cache Scope 标识均已移除。
 `manifest.json` 记录了 Git 忽略目录中原始 Run 文件的 SHA256。

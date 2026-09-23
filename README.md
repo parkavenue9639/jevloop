@@ -61,7 +61,7 @@ selected turn, not a general performance or correctness claim.
 Generated from [public run data](docs/evidence/fastapi-6turn-20260922/summary.json)
 using the dashboard's color palette. This is a static data visualization, not a live dashboard.
 
-[Full metrics, method, limitations, pricing, and run evidence →](docs/fastapi-case-study.md#english)
+[Full metrics, method, limitations, pricing, and run evidence →](docs/evaluation/fastapi-case-study.md#english)
 · [Regenerate the panels](docs/assets/README.md#summary-panels)
 
 ## Why JevLoop
@@ -102,7 +102,7 @@ The LLM reads a stable conversation projection with deduplicated tool evidence;
 Jev reads a bounded `Workspace` with observations and grounded candidates.
 Recovery metadata and Jev views do not enter LLM tool results. Only the transcript
 is persisted; both views are recoverable and own independent display budgets.
-See the [projection contract](docs/transcript-projection-contract.md).
+See the [projection contract](docs/contracts/transcript-projection.md).
 
 ### Observations become optional argument bindings
 
@@ -113,7 +113,7 @@ operation. The LLM generates all arguments from context, with no inherited
 partial bindings. Authoring, arbitration and plain LLM share a stable canonical
 tool catalog; dynamic candidates belong only to Jev. No user-text matching
 generates candidates; all paths share argument validation and execution policy.
-See the [cache and argument contract](docs/llm-cache-contract.md).
+See the [cache and argument contract](docs/contracts/llm-cache.md).
 
 ### One runtime for every driver
 
@@ -273,11 +273,13 @@ backend/   Python runtime, drivers, question compiler, ledger, guardrails,
            Docker sandbox, Lark adapter, benchmark runner, and dashboard API
 frontend/  React 19 + TypeScript + Vite dashboard
            chat, comparison, metrics, session history, and replay
-docs/      Design of record, invariants, migration plan, and acceptance criteria
+docs/      Current architecture/contracts, evaluations, public evidence, and archive
 ```
 
 Start with:
 
+- [`docs/README.md`](docs/README.md) — documentation index, current contracts,
+  evaluation history and archive boundaries;
 - [`docs/backend-layout.md`](docs/backend-layout.md) — package ownership and
   enforced dependency directions;
 - [`backend/jevloop/runtime/kernel.py`](backend/jevloop/runtime/kernel.py) — shared loop and
@@ -288,8 +290,8 @@ Start with:
   question compiler, and response validation;
 - [`backend/jevloop/context/transcript.py`](backend/jevloop/context/transcript.py) —
   append-only conversation ledger;
-- [`docs/architecture.md`](docs/architecture.md) — complete architecture and
-  target contracts.
+- [`docs/architecture.md`](docs/architecture.md) — current architecture and
+  implementation boundaries.
 
 ## Development
 

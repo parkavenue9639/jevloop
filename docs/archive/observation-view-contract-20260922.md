@@ -1,14 +1,19 @@
-# Observation views and argument binding contract
+# Original observation-view contract (historical)
+
+> Archived on 2026-09-23. Partial binding and shared source/display budgets
+> below have been superseded. Retained for design history and original run
+> receipts, not as implementation guidance. See the current
+> [observation contract](../contracts/observation-views.md).
 
 Status: implementation contract, 2026-09-22. Branch:
 `feat/observation-view-bindings`, baseline `7836c03`.
 
-Update: [Transcript projection contract](transcript-projection-contract.md)
+Update: [Transcript projection contract](../contracts/transcript-projection.md)
 supersedes storing bounded Jev views in the source and shared ledger/display
 budgets. New records persist observation facts; Jev and LLM recover independent
 views. Historical implementation receipts below are retained as history.
 
-Update: [Stable LLM tool contract](llm-cache-contract.md) supersedes the
+Update: [Stable LLM tool contract](../contracts/llm-cache.md) supersedes the
 partial-binding/remaining-parameter authoring design below. Historical run
 receipts remain unchanged; current candidates must be complete, or Jev selects
 LLM_PARAMETERS for unrestricted full-argument generation for the chosen tool.
@@ -193,7 +198,7 @@ direct execution. Turn 10 answered from stale historical evidence without
 reading the new offer. Thus the implementation and supplemental validation are complete,
 but the design has not demonstrated performance or quality parity on that
 supplemental suite; do not
-merge based on an asserted speedup. See [evaluation](observation-view-evaluation.md)
+merge based on an asserted speedup. See [evaluation](evaluations/observation-view-evaluation.md)
 for both supplemental runs, error accounting and the next freshness/coverage
 design question.
 
@@ -220,5 +225,5 @@ zero successful direct tool calls; 21 of 27 Jev attempts required arbitration.
 This sample shows a relative step/cost advantage over its plain lane, not proof
 of new direct-binding gains or improvement over the historical README Jev run.
 The completion-only scoring boundary and full results are documented in
-[README FastAPI replay](readme-fastapi-observation-replay.md). Final offline
+[README FastAPI replay](evaluations/readme-fastapi-observation-replay.md). Final offline
 regression receipt including the replay harness: 268 tests passed, Ruff passed.

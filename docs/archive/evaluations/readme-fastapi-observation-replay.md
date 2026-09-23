@@ -1,5 +1,8 @@
 # README FastAPI six-turn replay after observation-binding refactor
 
+> Historical experiment, archived 2026-09-23. Results describe the recorded
+> runtime only. See the [evaluation index](../../evaluation/README.md) for newer runs.
+
 Date: 2026-09-22. Branch: `feat/observation-view-bindings`.
 Runtime commit: `79ba34b`; executable digest: `a6e1c6ec8d2e`.
 

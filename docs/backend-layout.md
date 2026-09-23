@@ -1,6 +1,7 @@
 # Backend package boundaries
 
-Directory migration after the independent-context fix `ed74843`. This change
+Current package contract, introduced by the directory migration after the
+independent-context fix `ed74843`. That migration
 organizes responsibilities and imports; it does not change model routing,
 thresholds, prompts, tool behavior or evaluation criteria.
 
@@ -52,13 +53,18 @@ to make an import work. Changes to these rules require architecture review.
 - Old flat Python internals are intentionally moved, not retained as dozens of
   root forwarding modules; this pre-alpha project does not promise those paths
   as a public Python API. Callers importing internals must use the new locations.
-- Docker context, frontend dist, default benchmarks, artifacts, sessions and
-  runtime-digest inputs retain their previous resolved locations via `paths.py`.
+- Docker context, frontend dist, default benchmarks, artifacts and sessions
+  retain their previous resolved locations via `paths.py`. Runtime hashing
+  retains its backend-root anchor, but source moves change its relative-path
+  inputs and digest; a directory migration is not digest-neutral.
 - Historical run receipts are not rewritten to pretend they used the new layout.
   Active source documentation is updated; old experiment commands may refer to
   old internal import paths and are interpreted at their recorded revisions.
 
-## Validation receipt
+## Historical migration receipt (2026-09-22)
+
+These counts describe validation of the package migration, not the latest
+regression run. Later provider measurements are indexed in [evaluation](evaluation/README.md).
 
 - 357 offline tests passed, 9 skipped for unavailable optional host FastAPI
   dependencies; no dependencies installed. Ruff and whitespace checks passed.

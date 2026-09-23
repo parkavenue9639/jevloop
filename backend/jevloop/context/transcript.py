@@ -2,7 +2,7 @@
 
 Recovery and Jev rebuild from dump(); all LLM consumers use llm_messages().
 Each model projection owns its own budget without changing durable evidence.
-See docs/transcript-projection-contract.md before adding record fields.
+See docs/contracts/transcript-projection.md before adding record fields.
 """
 
 import json

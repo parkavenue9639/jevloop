@@ -1,11 +1,14 @@
 # FastAPI derived task-family contract
 
+Current workload contract for `fastapi-task-families-v1`. Runtime revisions and
+measurements belong to individual [run reports](README.md), not the workload ID.
+
 This is a new fixed workload derived from the README FastAPI workflow, **not**
 the original six user messages or `fastapi_case.json`, and not a reproduction of
 their scores. Source: `backend/benchmarks/fastapi_families.py`, suite ID
 `fastapi-task-families-v1`. `suite_payload()` returns a fresh JSON-serializable
 `suite` / `description` / `scenarios` object compatible with
-`jevloop.bench.load_scenarios`. It performs no execution on import.
+`jevloop.evaluation.bench.load_scenarios`. It performs no execution on import.
 
 ## Workload
 
@@ -119,12 +122,13 @@ Do not drop failed turns or label these new families as historical README
 results. A single paired run is an observation, not a general performance claim;
 do not tune the suite after observing one lane's output without versioning it.
 
-## Frozen execution protocol (before model calls)
+## Execution protocol
 
-Runner: `backend/scripts/run_fastapi_families.py`. Agent runtime stays at
-`a22f61c` / executable digest `cdf87e8f5b6b`, including the previously identified
-phase/binding confidence coupling. No prompt, tool, threshold or driver changes
-are part of this experiment.
+Runner: `backend/scripts/run_fastapi_families.py`. Freeze and record the source
+revision and executable digest before each experiment. Do not change prompts,
+tools, thresholds, drivers or scoring during a run. The initial run used
+`a22f61c` / `cdf87e8f5b6b`; that is historical provenance, not a requirement
+to run every later experiment on the old runtime.
 
 Both lanes use the same existing image, tool surface and 20-step/600-second
 per-turn limits, confidence threshold 0.5, ambiguity gate 0.4, write confidence
@@ -148,6 +152,8 @@ request are matched to provider-normalized proposal arguments of successful
 effects. It is not a frozen-ledger audit, a semantic necessity judge or the
 theoretical maximum direct rate. It does not synthesize multi-target candidate
 combinations. Raw counters must be interpreted alongside per-turn checks.
+
+## Historical first-run preflight (2026-09-22)
 
 Preflight: 288 host tests passed, 9 API controls explicitly skipped for missing
 host FastAPI/httpx dependencies; Ruff passed. In the existing sandbox image,

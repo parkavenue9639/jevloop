@@ -56,7 +56,7 @@ JevLoop 是独立的开源项目，由 Jev 提供能力，但不是 TypeSafe 官
 基于[公开运行数据](docs/evidence/fastapi-6turn-20260922/summary.json)生成，
 复用前端面板配色。这是静态数据可视化，不是实时仪表盘。
 
-[完整指标、实验方法、限制、计价与 Run 证据 →](docs/fastapi-case-study.md#中文)
+[完整指标、实验方法、限制、计价与 Run 证据 →](docs/evaluation/fastapi-case-study.md#中文)
 · [重新生成面板](docs/assets/README.md#summary-panels)
 
 ## 为什么是 JevLoop
@@ -87,14 +87,15 @@ argmax 不一致时，执行前直接拒绝。
 底层 `Transcript` 是唯一事实来源，不等于任一模型的提示词。LLM 读取带单份工具证据的
 稳定对话投影；Jev 读取含观察与真实候选的有界 `Workspace`。内部恢复元数据和 Jev
 视图不进入 LLM 工具结果。持久化只保存 Transcript；两种视图都可重建，并各自拥有
-独立的展示预算。详见[投影契约](docs/transcript-projection-contract.md)。
+独立的展示预算。详见[投影契约](docs/contracts/transcript-projection.md)。
 
 ### 观察结果成为可选的参数绑定
 
 按目录分页列举、按行读取和有界搜索产生带真实引用的历史观察视图。Jev 可以直接
 选择兼容引用及工具声明的默认参数，也始终可以为同一操作选择 `LLM_PARAMETERS`。
 部分绑定保持锁定，由 LLM 补齐其余参数；候选构造不机械匹配用户输入。
-所有路径共用参数校验和执行策略。详见[实现契约](docs/observation-view-contract.md)。
+所有路径共用参数校验和执行策略。详见[观察契约](docs/contracts/observation-views.md)
+与[稳定工具契约](docs/contracts/llm-cache.md)。
 
 ### 所有 Driver 共用一个 Runtime
 
@@ -243,16 +244,18 @@ backend/   Python Runtime、Driver、问题编译器、Ledger、Guardrail、Dock
            沙箱、Lark Adapter、Benchmark Runner 与 Dashboard API
 frontend/  React 19 + TypeScript + Vite Dashboard
            对话、成对比较、指标、Session 历史与回放
-docs/      设计记录、系统不变量、迁移计划与验收条件
+docs/      当前架构与契约、评测、公开证据及历史归档
 ```
 
 建议从以下文件开始阅读：
 
+- [`docs/README.md`](docs/README.md) — 文档导航、当前契约、评测记录与归档边界；
+- [`docs/backend-layout.md`](docs/backend-layout.md) — 包职责和受检查的依赖方向；
 - [`backend/jevloop/runtime/kernel.py`](backend/jevloop/runtime/kernel.py) — 共享 Loop 与执行语义；
 - [`backend/jevloop/decision/drivers.py`](backend/jevloop/decision/drivers.py) — Jev 与纯 LLM Driver；
 - [`backend/jevloop/decision/model.py`](backend/jevloop/decision/model.py) — Jev Client、问题编译与响应校验；
 - [`backend/jevloop/context/transcript.py`](backend/jevloop/context/transcript.py) — 追加式对话账本；
-- [`docs/architecture.md`](docs/architecture.md) — 完整架构与目标契约。
+- [`docs/architecture.md`](docs/architecture.md) — 当前架构与实现边界。
 
 ## 开发
 

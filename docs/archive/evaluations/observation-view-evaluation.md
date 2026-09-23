@@ -1,5 +1,8 @@
 # Observation-view refactor: implementation and paired evaluation
 
+> Historical experiment, archived 2026-09-23. Results describe the recorded
+> runtime only. See the [evaluation index](../../evaluation/README.md) for newer runs.
+
 **Scope correction:** these procurement runs were not the user's intended
 FastAPI baseline. Preserve them as supplemental evidence only; they do not
 complete the requested FastAPI validation.
@@ -8,7 +11,7 @@ The subsequently confirmed and completed primary run is documented in
 [README FastAPI six-turn replay](readme-fastapi-observation-replay.md).
 
 Date: 2026-09-22. Branch: `feat/observation-view-bindings`.
-Contract: [observation-view-contract.md](observation-view-contract.md).
+Contract: [original observation-view contract](../observation-view-contract-20260922.md).
 
 ## Scope and evidence
 

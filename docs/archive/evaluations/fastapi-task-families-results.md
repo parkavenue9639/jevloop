@@ -1,5 +1,8 @@
 # FastAPI task families: first frozen paired run
 
+> Historical experiment, archived 2026-09-23. Results describe the recorded
+> runtime only. See the [evaluation index](../../evaluation/README.md) for newer runs.
+
 ## Result at a glance
 
 This run supports **evidence reuse without tool bypass**, not a general claim
@@ -25,7 +28,7 @@ include the connection failures without call receipts.
 ## Frozen workload and provenance
 
 The task descriptions, fixtures, behavioral probes and limits were fixed before
-model calls. See [the contract](fastapi-task-families-contract.md). These are new
+model calls. See [the contract](../../evaluation/fastapi-task-families.md). These are new
 derived tasks, **not** a verbatim replay of the README or `fastapi_case.json`.
 The generation family follows the same progression but specifies an importable
 `app.py` and exact minimal endpoint contracts, using TestClient rather than a

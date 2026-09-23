@@ -1,6 +1,6 @@
 # One transcript, independent model projections
 
-Implementation contract, 2026-09-22. This supersedes descriptions equating the
+Current implementation contract, introduced 2026-09-22. This supersedes descriptions equating the
 durable transcript with the LLM-visible message list, including the original
 architecture and observation-view storage/budget rules. Stable tool schemas and
 complete-arguments-or-LLM_PARAMETERS routing remain unchanged.
@@ -26,7 +26,9 @@ complete-arguments-or-LLM_PARAMETERS routing remain unchanged.
    remain evidence, unlike internal execution IDs.
 4. **One LLM surface.** Parameter authoring, arbitration, plain decisions and
    legacy text authoring all use the same projector. Their appended request
-   instructions may differ; the historical projection and tool catalog do not.
+   instructions may differ; the historical projection does not. Canonical
+   parameter, arbitration and plain requests share the tool catalog; legacy
+   text authoring sends projected messages without a tools field.
 5. **Stable and isolated.** Projection does not interpret the user goal, make
    model calls, query the environment, modify source records, or depend on later
    messages. Appending records preserves the previous projected prefix.
@@ -55,7 +57,7 @@ complete-arguments-or-LLM_PARAMETERS routing remain unchanged.
 - New providers use explicit evidence fields (including generic `data`) or add
   a tested result adapter. Internal record fields are not an implicit LLM API.
 
-## Non-goals
+## Scope of the original implementation
 
 No confidence/ambiguity changes, new tools, completion-policy changes, semantic
 history summarization, shell-policy changes, benchmark retuning, paid reruns,
@@ -76,7 +78,10 @@ publishing or merging. This fixes a core boundary, not a claimed performance win
   model transport where available. Record actual receipts separately from
   unmeasured provider cache or performance claims.
 
-## Implementation receipt
+## Historical implementation receipt (2026-09-22)
+
+These are the checks at implementation time, not the latest suite count. Later
+real-provider runs are indexed in [evaluation](../evaluation/README.md).
 
 - Explicit `Transcript.llm_messages()` is used by all four LLM request paths;
   `messages()` is a compatibility alias, while `dump()` remains the detached
