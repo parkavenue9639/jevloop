@@ -6,7 +6,7 @@ import { ChatInput } from "./ChatInput";
  * both lanes in one card; this outer surface never creates a detached rail. */
 export function ChatView({ chat, className = "" }: { chat: ChatApi; className?: string }) {
   return (
-    <div className={`flex h-full min-w-0 flex-1 flex-col ${className}`}>
+    <div className={`flex min-h-0 min-w-0 flex-1 flex-col ${className}`}>
       <MessageList chat={chat} />
       <ChatInput
         disabled={chat.running || chat.replaying}

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useT } from "../i18n";
 import type { RunSummary } from "../types";
 import { RunHistory } from "./RunHistory";
@@ -14,6 +15,19 @@ export function HistoryDrawer({ open, onClose, runs, currentSessionId, onPickSes
   disabled: boolean;
 }) {
   const t = useT();
+  // Escape dismisses the mobile overlay and returns focus to the header's
+  // history toggle; the docked (md+) rail is part of the layout, not a dialog
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (!window.matchMedia("(max-width: 767px)").matches) return;
+      onClose();
+      document.querySelector<HTMLButtonElement>('[data-testid="history-toggle"]')?.focus();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
   if (!open) return null;
   return (
     <>

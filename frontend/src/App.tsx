@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { LangToggle, useT } from "./i18n";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { useChat } from "./chat";
@@ -14,9 +14,23 @@ import { SessionSummaryPanel } from "./components/SessionSummaryPanel";
 function App() {
   const t = useT();
   const chat = useChat();
-  const [historyOpen, setHistoryOpen] = useState(
-    () => typeof window !== "undefined" && window.innerWidth >= 768,
-  );
+  const [historyOpen, setHistoryOpen] = useState(() => {
+    try {
+      const stored =
+        typeof localStorage === "undefined" ? null : localStorage.getItem("jevloop.historyOpen");
+      if (stored != null) return stored === "1";
+    } catch {
+      // storage unavailable — fall through to the viewport default
+    }
+    return typeof window !== "undefined" && window.innerWidth >= 768;
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem("jevloop.historyOpen", historyOpen ? "1" : "0");
+    } catch {
+      // best effort — the preference simply won't survive a reload
+    }
+  }, [historyOpen]);
 
   const jevLane = chat.stream.lanes.jev;
   const baselineLane = chat.stream.lanes.baseline;
@@ -45,6 +59,7 @@ function App() {
     <div className="flex h-dvh flex-col">
       <header className="flex shrink-0 items-center gap-3 border-b border-line bg-surface px-4 py-2.5">
         <button
+          data-testid="history-toggle"
           onClick={() => setHistoryOpen((o) => !o)}
           className={`rounded-full border px-2 py-1 text-xs font-semibold transition-colors ${
             historyOpen ? "border-accent text-accent" : "border-line text-ink2 hover:text-ink"
@@ -53,8 +68,8 @@ function App() {
         >
           🕘 {t("historyBtn")}
         </button>
-        <h1 className="text-base font-semibold tracking-tight text-ink">
-          JevLoop <span className="script-accent text-lg text-accent">by Jev</span>
+        <h1 className="shrink-0 whitespace-nowrap text-base font-semibold tracking-tight text-ink">
+          JevLoop <span className="script-accent hidden text-lg text-accent sm:inline">by Jev</span>
         </h1>
         <span className="num hidden border border-line px-2 py-0.5 text-xs font-medium text-ink2 sm:inline">
           {statusLabel}
@@ -65,7 +80,7 @@ function App() {
           className="rounded-full border border-line px-2 py-1 text-xs font-semibold text-ink2 transition-colors hover:text-ink disabled:opacity-40"
           title={t("newSession")}
         >
-          ✚ {t("newSession")}
+          ✚ <span className="hidden sm:inline">{t("newSession")}</span>
         </button>
         <ThemeToggle />
         <LangToggle />

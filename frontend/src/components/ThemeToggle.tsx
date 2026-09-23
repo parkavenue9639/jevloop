@@ -1,14 +1,18 @@
+import { useState } from "react";
 import { useLang } from "../i18n";
 
 /** Ivory/dark toggle. The ivory parchment is the default; the inverted slate
  *  rhythm is opt-in. Stored in localStorage, applied pre-paint by index.html. */
 export function ThemeToggle() {
   const { lang } = useLang();
-  const dark = document.documentElement.dataset.theme === "dark";
+  const [dark, setDark] = useState(
+    () => document.documentElement.dataset.theme === "dark",
+  );
   const toggle = () => {
-    const next = dark ? "light" : "dark";
-    document.documentElement.dataset.theme = next;
-    localStorage.setItem("jevloop.theme", next);
+    const next = !dark;
+    setDark(next);
+    document.documentElement.dataset.theme = next ? "dark" : "light";
+    localStorage.setItem("jevloop.theme", next ? "dark" : "light");
   };
   return (
     <button
