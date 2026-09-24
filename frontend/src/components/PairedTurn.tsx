@@ -12,7 +12,7 @@ export function UserBubble({ goal }: { goal: string }) {
     <div className="flex justify-end">
       <div
         data-testid="user-bubble"
-        className="max-w-[85%] whitespace-pre-wrap rounded-2xl bg-accent px-4 py-2.5 text-sm leading-relaxed text-white"
+        className="max-w-[85%] break-words whitespace-pre-wrap rounded-2xl bg-accent px-4 py-2.5 text-sm leading-relaxed text-white"
       >
         {goal}
       </div>
@@ -66,7 +66,7 @@ export function PairedTurn({ runId, chat }: { runId: string; chat: ChatApi }) {
     jev: lanePhase("jev", jev, data.errors, data.done),
     baseline: lanePhase("baseline", baseline, data.errors, data.done),
   };
-  const isActive = runId === chat.activeRunId;
+  const isActive = runId === chat.activeRunId && chat.canControl;
   const [compareOpen, setCompareOpen] = useState(isActive);
 
   return (
@@ -104,6 +104,7 @@ export function PairedTurn({ runId, chat }: { runId: string; chat: ChatApi }) {
             error={laneErrorMessage("jev", data)}
             onContinue={isActive ? chat.continueRun : undefined}
             onAbort={isActive ? chat.abortRun : undefined}
+            historical={!isActive}
             compact
           />
           <ActivityGroup
@@ -113,6 +114,7 @@ export function PairedTurn({ runId, chat }: { runId: string; chat: ChatApi }) {
             error={laneErrorMessage("baseline", data)}
             onContinue={isActive ? chat.continueRun : undefined}
             onAbort={isActive ? chat.abortRun : undefined}
+            historical={!isActive}
             compact
           />
         </div>

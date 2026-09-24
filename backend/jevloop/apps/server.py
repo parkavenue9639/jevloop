@@ -13,6 +13,7 @@ import time
 import uuid
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlsplit
 
 from jevloop.config import DEFAULT_AMBIGUITY_GATE, DEFAULT_ANSWER_PROGRESS_FLOOR, DEFAULT_ESCALATE_THRESHOLD
 from jevloop.contracts.policy import WritePolicy
@@ -69,6 +70,7 @@ class RunState:
         self.params = params
         self.log = []  # every event, replayed for late subscribers
         self.seq = 0
+        self._append_error = None
         self.lock = threading.Lock()
         self.clients = []  # one queue per SSE connection
         self.resume = asyncio.Event()
@@ -79,8 +81,14 @@ class RunState:
 
     def emit(self, event):
         with self.lock:
+            if self._append_error is not None:
+                raise self._append_error
             next_seq = self.seq + 1
-            runstore.append(self.run_id, next_seq, event)
+            try:
+                runstore.append(self.run_id, next_seq, event)
+            except Exception as error:
+                self._append_error = error
+                raise
             self.seq = next_seq
             entry = (next_seq, event)
             self.log.append(entry)
@@ -377,8 +385,22 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         parts = self.path.strip("/").split("/")
-        if self.path == "/api/runs":
-            return self._json({"runs": runstore.list_runs()})
+        url = urlsplit(self.path)
+        if url.path == "/api/runs":
+            query = parse_qs(url.query, keep_blank_values=True)
+            if not query:
+                return self._json({"runs": runstore.list_runs()})
+            if set(query) != {"session_id"} or len(query["session_id"]) != 1:
+                return self._json({"error": "expected one session_id query parameter"}, 400)
+            try:
+                session_id = runstore.validate_session_id(query["session_id"][0])
+            except ValueError as error:
+                return self._json({"error": str(error)}, 400)
+            return self._json({
+                "runs": runstore.list_runs(session_id=session_id),
+                "session_id": session_id,
+                "complete": True,
+            })
         if len(parts) == 3 and parts[0] == "api" and parts[1] == "run":
             state = DASHBOARD.get_run(parts[2])
             if not state:

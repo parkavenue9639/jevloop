@@ -15,7 +15,7 @@ function Turn({ runId, chat }: { runId: string; chat: ChatApi }) {
   const goal = data.params ? String(data.params.goal ?? "") : "";
   const state = data.lanes.jev;
   const phase = lanePhase("jev", state, data.errors, data.done);
-  const isActive = runId === chat.activeRunId;
+  const isActive = runId === chat.activeRunId && chat.canControl;
   return (
     <div className="flex flex-col gap-3">
       {goal && <UserBubble goal={goal} />}
@@ -24,6 +24,7 @@ function Turn({ runId, chat }: { runId: string; chat: ChatApi }) {
         state={state}
         phase={phase}
         error={laneErrorMessage("jev", data)}
+        historical={!isActive}
         onContinue={isActive ? chat.continueRun : undefined}
         onAbort={isActive ? chat.abortRun : undefined}
       />
@@ -38,7 +39,14 @@ function Turn({ runId, chat }: { runId: string; chat: ChatApi }) {
 export function MessageList({ chat }: { chat: ChatApi }) {
   const t = useT();
   const ref = useRef<HTMLDivElement>(null);
+  const content = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
+  useEffect(() => {
+    if (chat.playback.status !== "idle" && chat.playback.position === 0) {
+      pinned.current = true;
+      if (ref.current) ref.current.scrollTop = 0;
+    }
+  }, [chat.playback.status, chat.playback.position]);
 
   const onScroll = () => {
     const el = ref.current;
@@ -46,31 +54,25 @@ export function MessageList({ chat }: { chat: ChatApi }) {
     pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
   };
 
-  // signature of everything that grows the transcript
-  const sig =
-    chat.turns
-      .map((id) => {
-        const d = chat.streamOf(id);
-        return [
-          d.lanes.jev?.steps.length ?? 0,
-          d.lanes.jev?.answer ? 1 : 0,
-          d.lanes.baseline?.steps.length ?? 0,
-          d.lanes.baseline?.answer ? 1 : 0,
-          d.done ? 1 : 0,
-        ].join(".");
-      })
-      .join("|") + `#${chat.pendingGoal ?? ""}`;
-
+  // Observe both event-driven content growth and split-pane resizing. Do not
+  // steal the scroll position when the user has moved up to read history.
   useEffect(() => {
     const el = ref.current;
-    if (el && pinned.current) el.scrollTop = el.scrollHeight;
-  }, [sig]);
+    const body = content.current;
+    if (!el || !body) return;
+    const follow = () => { if (pinned.current) el.scrollTop = el.scrollHeight; };
+    const observer = new ResizeObserver(follow);
+    observer.observe(el);
+    observer.observe(body);
+    follow();
+    return () => observer.disconnect();
+  }, []);
 
   const paired = chat.turns.some((id) => chat.streamOf(id).lanes.baseline != null);
 
   return (
-    <div ref={ref} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto">
-      <div className={`mx-auto flex w-full flex-col gap-5 px-4 py-6 ${paired ? "max-w-5xl" : "max-w-3xl"}`}>
+    <div ref={ref} onScroll={onScroll} data-testid="conversation-scroll" className="min-h-0 flex-1 overflow-y-auto">
+      <div ref={content} className={`mx-auto flex w-full flex-col gap-5 px-4 py-6 ${paired ? "max-w-5xl" : "max-w-3xl"}`}>
         {chat.turns.map((runId) => (
           <Turn key={runId} runId={runId} chat={chat} />
         ))}

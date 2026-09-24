@@ -6,6 +6,7 @@ loading it back gives byte-identical UI. Files live under artifacts/runs/ (gitig
 
 import json
 import os
+import re
 import threading
 import time
 from pathlib import Path
@@ -14,6 +15,14 @@ from jevloop.paths import BACKEND_ROOT
 
 DIR = Path(os.environ.get("JEVLOOP_RUNS_DIR")
            or BACKEND_ROOT / "artifacts" / "runs")
+_id_re = re.compile(r"[A-Za-z0-9_-]{1,128}")
+
+
+def validate_session_id(session_id):
+    """Accept opaque local IDs, never paths or empty query values."""
+    if not isinstance(session_id, str) or not _id_re.fullmatch(session_id):
+        raise ValueError("invalid session_id")
+    return session_id
 
 
 def _path(run_id):
@@ -65,22 +74,40 @@ class Journal:
     def __init__(self, run_id):
         self.run_id = run_id
         self.seq = 0
+        self._append_error = None
         self._lock = threading.Lock()
 
     def emit(self, event):
         with self._lock:
+            if self._append_error is not None:
+                raise self._append_error
             next_seq = self.seq + 1
-            append(self.run_id, next_seq, event)
+            try:
+                append(self.run_id, next_seq, event)
+            except Exception as error:
+                # A failed flush/fsync may already have written the record.
+                # Never append again with an uncertain journal position.
+                self._append_error = error
+                raise
             self.seq = next_seq
             return next_seq
 
 
-def list_runs(limit=50):
-    """Summaries of stored runs, newest first, for the history panel."""
+def list_runs(limit=50, *, session_id=None):
+    """Newest-first summaries; an explicit session returns all of its runs.
+
+    The global history remains bounded. Session filtering must precede that
+    bound so replay never silently loses earlier turns to unrelated runs.
+    """
+    if session_id is not None:
+        validate_session_id(session_id)
     runs = []
     if not DIR.is_dir():
         return runs
-    for file in sorted(DIR.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)[:limit]:
+    files = sorted(DIR.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if session_id is None:
+        files = files[:limit]
+    for file in files:
         meta, finished, has_error = None, False, False
         try:
             with file.open(encoding="utf-8") as handle:
@@ -101,10 +128,13 @@ def list_runs(limit=50):
         if not meta:
             continue
         params = meta.get("params", {})
+        stored_session_id = params.get("session_id") or file.stem
+        if session_id is not None and stored_session_id != session_id:
+            continue
         profile = params.get("profile")
         runs.append({
             "run_id": file.stem,
-            "session_id": params.get("session_id") or file.stem,  # session grouping key
+            "session_id": stored_session_id,
             "created_at": meta.get("created_at"),
             "goal": params.get("goal", ""),
             "compare": profile in {"paired_simulator", "paired_shadow"} or bool(params.get("compare")),

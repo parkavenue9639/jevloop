@@ -1,11 +1,24 @@
 import { useEffect, useRef, useState } from "react";
-import type { FormEvent, KeyboardEvent } from "react";
+import type { FormEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { RunParams } from "../types";
 import { useT } from "../i18n";
+import { Icon } from "./Icon";
 
 const field =
   "w-full resize-y rounded-xl bg-transparent px-1.5 py-1 text-sm text-ink outline-none placeholder:text-ink2";
-const label = "text-[11px] font-semibold uppercase tracking-wide text-ink2";
+/** fixed 3-line label block: long locale strings stay fully visible (no
+ *  truncation — tooltips don't exist on touch), and because every label box
+ *  is the same height the inputs beneath them stay row-aligned. */
+const label = "block min-h-12 text-[11px] font-semibold uppercase leading-4 tracking-wide text-ink2";
+
+/** Numeric-field parse: empty or non-finite input degrades to null. Null is
+ *  legal ("off") only for the gate fields; every other field falls back to
+ *  its default in send(), so the request body always carries finite numbers. */
+const num = (raw: string): number | null => {
+  if (raw.trim() === "") return null;
+  const v = Number(raw);
+  return Number.isFinite(v) ? v : null;
+};
 
 /** Bottom composer: textarea (Enter sends, Shift+Enter is a newline), a
  *  prominent compare-run checkbox and a settings popover carrying the run
@@ -23,24 +36,37 @@ export function ChatInput({ disabled, starting, error, onSend }: {
   const [live, setLive] = useState(false);
   const [sandboxNetwork, setSandboxNetwork] = useState(true);
   const [stepPause, setStepPause] = useState(false);
-  const [threshold, setThreshold] = useState(0.5);
+  const [threshold, setThreshold] = useState<number | null>(0.5);
   const [ambiguityGate, setAmbiguityGate] = useState<number | null>(0.4);
   const [progressFloor, setProgressFloor] = useState<number | null>(null);
-  const [maxSteps, setMaxSteps] = useState(0);
-  const [maxWrites, setMaxWrites] = useState(0);
-  const [minConfidence, setMinConfidence] = useState(0.6);
-  const [recipients, setRecipients] = useState("陆冲");
+  const [maxSteps, setMaxSteps] = useState<number | null>(0);
+  const [maxWrites, setMaxWrites] = useState<number | null>(0);
+  const [minConfidence, setMinConfidence] = useState<number | null>(0.6);
+  const [recipients, setRecipients] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const popRef = useRef<HTMLDivElement>(null);
+  const settingsBtnRef = useRef<HTMLButtonElement>(null);
 
-  // close the popover on outside click
+  // close the popover on outside click; Escape closes it and returns focus
+  // to the trigger so keyboard users are not stranded
   useEffect(() => {
     if (!settingsOpen) return;
+    const close = (refocus: boolean) => {
+      setSettingsOpen(false);
+      if (refocus) settingsBtnRef.current?.focus();
+    };
     const onDoc = (e: MouseEvent) => {
-      if (!popRef.current?.contains(e.target as Node)) setSettingsOpen(false);
+      if (!popRef.current?.contains(e.target as Node)) close(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close(true);
     };
     document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [settingsOpen]);
 
   const canSend = !disabled && !starting && !!goal.trim();
@@ -51,19 +77,19 @@ export function ChatInput({ disabled, starting, error, onSend }: {
       goal: goal.trim(),
       profile: compare ? "paired_shadow" : live ? "single_live" : "single_shadow",
       step_pause: stepPause,
-      escalate_threshold: threshold,
+      escalate_threshold: threshold ?? 0.5,
       ambiguity_gate: ambiguityGate,
       answer_progress_floor: progressFloor,
-      max_steps: maxSteps,
-      max_writes: maxWrites,
+      max_steps: maxSteps ?? 0,
+      max_writes: maxWrites ?? 0,
       sandbox_network: sandboxNetwork,
-      min_confidence: minConfidence,
+      min_confidence: minConfidence ?? 0.6,
       allow_recipients: recipients.split(/[,，]/).map((s) => s.trim()).filter(Boolean),
     });
     setGoal(""); // the pending-goal echo takes over in the transcript
   };
 
-  const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+  const onKeyDown = (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       send();
@@ -76,11 +102,11 @@ export function ChatInput({ disabled, starting, error, onSend }: {
   };
 
   return (
-    <form onSubmit={onSubmit} className="shrink-0 border-t border-line bg-surface">
-      <div className="mx-auto max-w-3xl px-4 py-3">
+    <form onSubmit={onSubmit} className="chat-composer shrink-0 border-t border-line bg-surface">
+      <div className="composer-inner mx-auto px-4 py-3">
         {error && <p className="mb-2 text-xs text-critical">{error}</p>}
 
-        <div className="mb-2 flex items-center gap-2">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
           <label
             className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-1 text-sm font-semibold transition-colors ${
               compare ? "border-accent bg-accent/10 text-accent" : "border-line text-ink2 hover:text-ink"
@@ -103,14 +129,16 @@ export function ChatInput({ disabled, starting, error, onSend }: {
           <div className="relative ml-auto" ref={popRef}>
             <button
               type="button"
+              ref={settingsBtnRef}
               onClick={() => setSettingsOpen((o) => !o)}
               disabled={disabled}
-              className="rounded-xl border border-line px-3 py-1 text-sm text-ink2 transition-colors hover:text-ink disabled:opacity-50"
+              className="console-button"
+              aria-expanded={settingsOpen}
             >
-              ⚙ {t("settings")}
+              <Icon name="settings" /> {t("settings")}
             </button>
             {settingsOpen && (
-              <div className="absolute bottom-full right-0 z-30 mb-2 w-80 rounded-xl border border-line bg-surface p-3 shadow-lg">
+              <div className="absolute bottom-full right-0 z-30 mb-2 w-80 max-w-[calc(100cqw-2rem)] max-h-[calc(100dvh-12rem)] overflow-y-auto rounded-xl border border-line bg-surface p-3 shadow-lg">
                 <div className="flex flex-col gap-1.5">
                   <label className="flex cursor-pointer items-center gap-2 text-sm">
                     <input type="checkbox" checked={live} onChange={(e) => setLive(e.target.checked)}
@@ -135,46 +163,48 @@ export function ChatInput({ disabled, starting, error, onSend }: {
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <div>
-                    <label className={label} htmlFor="chat-threshold">{t("threshold")}</label>
+                    <label className={label} htmlFor="chat-threshold" title={t("threshold")}>{t("threshold")}</label>
                     <input id="chat-threshold" type="number" step={0.05} min={0} max={1} className={`${field} num mt-1`}
-                      value={threshold} onChange={(e) => setThreshold(Number(e.target.value))} disabled={disabled} />
+                      value={threshold ?? ""} placeholder="0.5"
+                      onChange={(e) => setThreshold(num(e.target.value))} disabled={disabled} />
                   </div>
                   <div>
-                    <label className={label} htmlFor="chat-ambiguity">{t("ambiguityGate")}</label>
+                    <label className={label} htmlFor="chat-ambiguity" title={t("ambiguityGate")}>{t("ambiguityGate")}</label>
                     <input id="chat-ambiguity" type="number" step={0.05} min={0} max={1}
                       className={`${field} num mt-1`} value={ambiguityGate ?? ""}
                       placeholder={t("off")}
-                      onChange={(e) => setAmbiguityGate(
-                        e.target.value === "" ? null : Number(e.target.value))}
+                      onChange={(e) => setAmbiguityGate(num(e.target.value))}
                       disabled={disabled} />
                   </div>
                   <div>
-                    <label className={label} htmlFor="chat-progress">{t("progressFloor")}</label>
+                    <label className={label} htmlFor="chat-progress" title={t("progressFloor")}>{t("progressFloor")}</label>
                     <input id="chat-progress" type="number" step={0.5} min={0} max={3}
                       className={`${field} num mt-1`} value={progressFloor ?? ""}
                       placeholder={t("off")}
-                      onChange={(e) => setProgressFloor(
-                        e.target.value === "" ? null : Number(e.target.value))}
+                      onChange={(e) => setProgressFloor(num(e.target.value))}
                       disabled={disabled} />
                   </div>
                   <div>
-                    <label className={label} htmlFor="chat-steps">{t("maxSteps")}</label>
+                    <label className={label} htmlFor="chat-steps" title={t("maxSteps")}>{t("maxSteps")}</label>
                     <input id="chat-steps" type="number" min={0} className={`${field} num mt-1`}
-                      value={maxSteps} onChange={(e) => setMaxSteps(Number(e.target.value))} disabled={disabled} />
+                      value={maxSteps ?? ""} placeholder="0"
+                      onChange={(e) => setMaxSteps(num(e.target.value))} disabled={disabled} />
                   </div>
                   <div>
-                    <label className={label} htmlFor="chat-writes">{t("maxWrites")}</label>
+                    <label className={label} htmlFor="chat-writes" title={t("maxWrites")}>{t("maxWrites")}</label>
                     <input id="chat-writes" type="number" min={0} className={`${field} num mt-1`}
-                      value={maxWrites} onChange={(e) => setMaxWrites(Number(e.target.value))} disabled={disabled} />
+                      value={maxWrites ?? ""} placeholder="0"
+                      onChange={(e) => setMaxWrites(num(e.target.value))} disabled={disabled} />
                   </div>
                   <div>
-                    <label className={label} htmlFor="chat-conf">{t("minConf")}</label>
+                    <label className={label} htmlFor="chat-conf" title={t("minConf")}>{t("minConf")}</label>
                     <input id="chat-conf" type="number" step={0.05} min={0} max={1} className={`${field} num mt-1`}
-                      value={minConfidence} onChange={(e) => setMinConfidence(Number(e.target.value))} disabled={disabled} />
+                      value={minConfidence ?? ""} placeholder="0.6"
+                      onChange={(e) => setMinConfidence(num(e.target.value))} disabled={disabled} />
                   </div>
                 </div>
                 <div className="mt-2">
-                  <label className={label} htmlFor="chat-recipients">{t("recipients")}</label>
+                  <label className={label} htmlFor="chat-recipients" title={t("recipients")}>{t("recipients")}</label>
                   <input id="chat-recipients" className={`${field} mt-1`} value={recipients}
                     onChange={(e) => setRecipients(e.target.value)} disabled={disabled}
                     placeholder={t("recipientsPh")} />
@@ -187,6 +217,7 @@ export function ChatInput({ disabled, starting, error, onSend }: {
         <div className="soft-lift flex items-end gap-2 rounded-2xl border border-line bg-surface2 px-3 py-2.5">
           <textarea
             data-testid="chat-input"
+            aria-label={t("chatPlaceholder")}
             rows={2}
             className={`${field} max-h-48 resize-y`}
             placeholder={t("chatPlaceholder")}

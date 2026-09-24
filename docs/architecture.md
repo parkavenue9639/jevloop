@@ -102,6 +102,53 @@ Sessions live under `backend/artifacts/sessions/`; run event streams under
 events are durably appended. Dashboard replay reads recorded events without
 new model calls. The frontend presents both per-turn and session aggregates.
 
+The execution graph and conversation stay mounted together in one resizable
+workspace (always side by side, default 72% graph / 28% conversation), driven by
+one `useChat` subscription and one persistent composer in the conversation pane. Each pane scrolls
+independently. Inspecting an older graph does not freeze the live conversation.
+The conversation shows received decision milestones before a completed step;
+these are presentation telemetry, not invented assistant messages or new ledger
+records. Its tail follows content/pane resizing only while the reader remains
+near the bottom; changing sessions resets the conversation's scroll identity.
+The horizontal graph uses a readable-size floor rather than shrinking with pane
+height; dense pools scroll locally and an explicit overview can fit the whole
+canvas. Candidate groups use compact rows and 2–4 columns as panel width allows;
+extreme pools expand downward. All submitted candidates remain present. Active nodes enlarge internally
+without moving ports or reflowing branches; reduced motion removes transitions.
+
+The console draws the single-transcript / independent-projection contract per
+lane; the paired baseline has its own transcript. Jev choices are nodes inside
+that flow, not a second context store. Optional `jev_request` telemetry carries
+the actual compiled questions immediately before HTTP; `jev_response` carries
+the original parsed choice before arbitration or weak-binding fallback.
+Both are correlated by `attempt_id`. `decision_ready` identifies the final
+proposal and its binding mode, not successful tool execution.
+`llm_started` / `llm_completed` bracket the actual arbitration, parameter and
+text-authoring calls, including arbitration before `decision_ready`. A returned
+helper is not yet validated or committed. The UI renders the request's complete
+choice pool before a response, retains it while highlighting consumed branches,
+and shows the Jev-to-LLM handoff without waiting for a completed `step`.
+
+The graph has two writeback routes: accepted calls/authored progress before
+dispatch, and execution/refusal evidence afterward. An `intent` follows the
+pre-dispatch checkpoint; a raw Jev response is not a ledger commit. Run-limit
+bookkeeping is not drawn as a newly appended tool result. The Jev workspace is
+an incrementally maintained projection, not a per-call reload from disk.
+
+These events never enter the model-facing transcript, and optional presentation
+observer exceptions do not alter a decision. Durable event-sink failures still
+stop execution; a failed append locks that journal against further writes because
+its final record may already have reached disk. A new attempt clears the display's previous candidates;
+after a step is recorded, the UI reads its original Jev model-call evidence.
+Older runs without these events remain replayable but cannot show a pre-response
+candidate preview. Missing probabilities, arbitration state and selections stay
+unknown. Historical, paused, disconnected and terminal views do not animate as
+live execution. Frontend selector/reducer checks run with
+`pnpm --filter jevloop-web test` (Node 22.6+); the production build also type-checks.
+With Vite running, `/tests/flow-preview.html` is an explicitly labeled offline
+fixture: manual gates hold the request, original choice, LLM handoff, return and
+commit stages for visual inspection without model calls or run-data writes.
+
 Recorded calls distinguish Jev decisions, plain decisions, parameter authoring,
 content authoring and arbitration. Reports separate provider usage, cache
 hits/misses/unknown tokens and estimated cost. A failed call without usage

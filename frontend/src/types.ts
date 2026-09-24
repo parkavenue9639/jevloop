@@ -44,6 +44,7 @@ export interface ModelCall {
 }
 
 export interface Step {
+  intent_id?: string;
   decision: Decision;
   escalation?: Escalation;
   outcome?: Outcome;
@@ -166,7 +167,11 @@ export type RunEvent =
   | { type: "meta"; params: Record<string, unknown>; created_at: string }
   | { type: "sandbox_ready"; image_id: string; lanes: Lane[] }
   | { type: "attempt_started"; lane?: Lane; attempt_id: string; step: number }
-  | { type: "decision_ready"; lane?: Lane; attempt_id: string; operation: string; needs_authoring: boolean }
+  | { type: "jev_request"; lane?: Lane; attempt_id: string; questions: Record<string, unknown> }
+  | { type: "jev_response"; lane?: Lane; attempt_id: string; response: Record<string, unknown> }
+  | { type: "llm_started"; lane?: Lane; attempt_id: string; kind: string; operation: string; reason?: string }
+  | { type: "llm_completed"; lane?: Lane; attempt_id: string; kind: string; operation: string; reason?: string; status: "returned" | "failed" }
+  | { type: "decision_ready"; lane?: Lane; attempt_id: string; operation: string; needs_authoring: boolean; binding_mode?: string | null; escalated?: boolean }
   | { type: "intent"; lane?: Lane; operation: string; target?: string | null }
   | { type: "dispatch_started"; lane?: Lane; operation: string }
   | { type: "observation"; lane?: Lane; operation?: string | null }
@@ -179,6 +184,8 @@ export type RunEvent =
   | { type: "done"; lane?: Lane };
 
 export interface LaneState {
+  /** Ephemeral observation of this attempt, not another transcript. */
+  decisionFrame?: DecisionFrame;
   steps: Step[];
   metrics: Metrics | null;
   awaiting: boolean;
@@ -187,6 +194,19 @@ export interface LaneState {
   finished: boolean;
   activity: LaneActivity | null;
   unknownAcknowledgements: number;
+}
+
+export interface DecisionFrame {
+  llm?: { kind: string; operation: string; reason?: string; status: "running" | "returned" | "failed" };
+  committed?: boolean;
+  attemptId: string;
+  step: number;
+  questions?: Record<string, unknown>;
+  response?: Record<string, unknown>;
+  finalOperation?: string;
+  finalBinding?: string | null;
+  needsAuthoring?: boolean;
+  escalated?: boolean;
 }
 
 export interface RunParams {

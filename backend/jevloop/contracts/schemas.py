@@ -1,18 +1,8 @@
 """Canonical model tool schemas, independent of transcript storage."""
 
-CORE_TOOL_SCHEMAS = [
-    {"type": "function", "function": {
-        "name": "ANSWER",
-        "description": "Deliver the final answer/summary to the user; ends the run.",
-        "parameters": {"type": "object",
-                       "properties": {"answer": {"type": "string"}},
-                       "required": ["answer"]}}},
-    {"type": "function", "function": {
-        "name": "DONE",
-        "description": "Declare the goal satisfied; nothing left to report.",
-        "parameters": {"type": "object", "properties": {},
-                       "required": []}}},
-]
+from jevloop.contracts.arguments import function_schema
+
+CORE_TOOL_SCHEMAS = [function_schema(operation=name) for name in ("ANSWER", "DONE")]
 
 
 def tool_schemas(provider) -> list:
@@ -37,10 +27,18 @@ def llm_tool_schemas(provider) -> list:
         raise ValueError("CANNOT_BIND is reserved for non-executable parameter refusal.")
     schemas.append({"type": "function", "function": {
         "name": "CANNOT_BIND",
-        "description": "Decline parameter generation without execution when evidence is insufficient. "
-                       "Use only in response to a parameter request.",
+        "description": "Decline a parameter request without execution when evidence is insufficient "
+                       "or the selected operation is inappropriate and must be reconsidered. "
+                       "For example, decline a locked ANSWER when the task still requires another "
+                       "tool operation. Return the concrete reason so the runtime can reconsider "
+                       "the operation; do not switch tools yourself or ask the user to repair "
+                       "internal routing. This is an internal recovery signal, not a user-facing "
+                       "refusal or request for permission. Use only in response to a parameter request.",
         "parameters": {"type": "object", "properties": {
-            "reason": {"type": "string", "minLength": 1}},
+            "reason": {"type": "string", "minLength": 1,
+                       "description": "Why the selected operation cannot be bound appropriately: "
+                                      "identify the missing evidence or remaining work requiring "
+                                      "a different operation."}},
             "required": ["reason"], "additionalProperties": False},
     }})
     return sorted(schemas, key=lambda schema: schema["function"]["name"])
@@ -49,7 +47,5 @@ def llm_tool_schemas(provider) -> list:
 def full_tool_schemas(provider) -> list:
     """Function-calling schemas with complete arguments — the baseline's surface
     (the LLM authors queries/content/arguments itself, as in a native loop)."""
-    from jevloop.contracts.arguments import function_schema
-
     return [function_schema(spec) for spec in provider.specs()] + [
         function_schema(operation="ANSWER"), function_schema(operation="DONE")]

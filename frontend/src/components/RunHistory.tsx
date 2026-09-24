@@ -4,8 +4,8 @@ import type { RunSummary } from "../types";
 interface SessionGroup {
   sessionId: string;
   runs: RunSummary[];           // oldest first
-  title: string;                // first turn's goal
-  createdAt: string | null;     // first turn's time
+  title: string;                // oldest turn's goal (the conversation topic)
+  createdAt: string | null;     // newest turn's time (drives recency sort)
   compare: boolean;
   live: boolean;
   error: boolean;
@@ -39,10 +39,13 @@ export function RunHistory({ runs, currentSessionId, onPickSession, disabled = f
   for (const run of runs) {  // newest-first input; keep order for sorting later
     const key = run.session_id ?? run.run_id;
     const group = groups.get(key) ?? {
-      sessionId: key, runs: [], title: run.goal, createdAt: run.created_at,
+      sessionId: key, runs: [], title: "", createdAt: run.created_at,
       compare: false, live: false, error: false, unfinished: false,
     };
     group.runs.push(run);
+    // input is newest-first, so the last write is the oldest turn's goal;
+    // createdAt keeps the seed value (newest) for the recency sort below
+    group.title = run.goal;
     group.compare = group.compare || run.compare;
     group.live = group.live || run.live;
     group.error = group.error || run.error;

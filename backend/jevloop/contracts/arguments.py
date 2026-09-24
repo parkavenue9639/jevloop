@@ -13,6 +13,26 @@ from jevloop.contracts.tools import text_field_for
 
 LLM_PARAMETERS = "LLM_PARAMETERS"
 
+# Stable operation semantics belong in the canonical schema, not a route-specific
+# authoring prompt. Every LLM path sees the same completion/refusal contract.
+ANSWER_DESCRIPTION = (
+    "Deliver a grounded final answer, necessary clarification, or evidenced limitation "
+    "to the user; ends the current turn. If supported executable work remains, "
+    "choose an appropriate tool instead of merely promising to do it. In a parameter "
+    "request locked to ANSWER, return CANNOT_BIND if another operation is needed "
+    "before answering; do not switch tools yourself. An operation lock is an internal "
+    "routing constraint, not missing user authorization or tool availability. Never "
+    "ask the user to confirm again, enable a tool, or change the selected operation "
+    "solely to resolve that constraint. Ask for clarification or authorization only "
+    "when genuinely required by the task or an actual runtime restriction."
+)
+ANSWER_CONTENT_DESCRIPTION = (
+    "The user-facing answer in the user's language, grounded in the task, conversation "
+    "and actual tool outcomes. Distinguish completed effects, proposed work and "
+    "unverified claims. Report failures or restrictions only when supported by "
+    "evidence; do not present internal routing instructions as user-facing blockers."
+)
+
 
 def parameter_schema(spec=None, operation=None):
     operation = operation or spec.name
@@ -34,7 +54,7 @@ def parameter_schema(spec=None, operation=None):
     if operation == "ANSWER" or (spec and spec.needs_text):
         field = text_field_for(operation)
         props[field] = {"type": "string", "minLength": 1, "maxLength": 20000,
-                        "description": spec.text_instruction if spec else "Final answer to the user."}
+                        "description": spec.text_instruction if spec else ANSWER_CONTENT_DESCRIPTION}
         required.append(field)
     return schema
 
@@ -43,7 +63,7 @@ def function_schema(spec=None, operation=None):
     operation = operation or spec.name
     return {"type": "function", "function": {
         "name": operation,
-        "description": spec.description if spec else "Deliver the final answer." if operation == "ANSWER"
+        "description": spec.description if spec else ANSWER_DESCRIPTION if operation == "ANSWER"
         else "Declare the goal satisfied.",
         "parameters": parameter_schema(spec, operation),
     }}

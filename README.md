@@ -36,6 +36,29 @@ complete conversation transcript and provider prompt-cache continuity.
 JevLoop is an independent open-source project. It is powered by Jev but is not
 an official TypeSafe product.
 
+## Watch candidates evolve across loops
+
+The console makes the loop visible: restore context from the transcript, show
+Jev's candidate pool, highlight the consumed choices, hand off to the LLM when
+needed, and append accepted calls and execution results back to the transcript.
+
+<a href="docs/assets/decision-topology-en.svg"><img src="docs/assets/decision-topology-en.gif" alt="Two consecutive real loop iterations: the first has 8 choice heads and only .gitkeep as a file candidate. WRITE_FILE creates main.py; the next loop has 14 heads, including main.py and new batch choices. Jev then selects ANSWER. Main nodes stay fixed." width="100%" /></a>
+
+**Tool results become future choices:** the first iteration writes `main.py`;
+the next offers it as a READ_FILE argument candidate and adds batch-choice heads.
+The candidate pool grows from **8 to 14 questions** within the same user task.
+
+Read the choices as **purpose → tool → arguments**, not as a sequence of every
+box. Green outlines mark newly available candidates/heads, **not selected ones**.
+Coral marks consumed choices; dim branches are unused; `FIX` means a rule-defined
+choice. Both iterations use **LLM authoring**, not LLM-free execution.
+The actual frontend component is rendered from redacted recorded events;
+playback uses **3× the original event-journal timing** (about 4.29s → 1.44s,
+rounded to GIF frames), not an independent performance or success benchmark.
+
+[Open the sharp, static SVG](docs/assets/decision-topology-en.svg)
+· [Source events, reading guide, and regeneration](docs/assets/README.md#decision-topology-replay)
+
 ## The same request, two agent loops
 
 “Add an endpoint to update data.” In this historical paired run, JevLoop reached

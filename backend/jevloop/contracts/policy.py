@@ -15,6 +15,10 @@ ERROR_STAGES = ("decision", "authoring", "preflight", "dispatch", "persistence")
 RECOVERABILITIES = ("recoverable", "terminal", "unsafe")
 
 
+class EventSinkError(OSError):
+    """Durable event recording failed; never optional or model-repairable."""
+
+
 class AttemptFailure(Exception):
     """A typed failure of one loop attempt. The observation-first runtime turns
     this into the same durable, append-only observation as a successful step;
