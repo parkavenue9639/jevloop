@@ -16,6 +16,7 @@ from pathlib import Path
 
 from jevloop.apps.server import CACHE_POLICY_ISOLATED, Dashboard, RunState, _cache_scope
 from jevloop.cli import load_env_file
+from jevloop.decision.laya import reported_model, required_credentials
 from jevloop.evaluation import bench
 from jevloop.storage import runstore, sessions
 from jevloop.tools.sandbox import workspace_volume_name
@@ -115,7 +116,7 @@ async def rerun(turns, out_dir, timeout):
                              "digest": source_digest, "runtime_digest": bench.runtime_digest(),
                              "name": "readme-fastapi-6turn-exact-session", "scenarios": 1, "turns": 6,
                              "started_at": started, "models": {
-                                 "jev": os.environ.get("TYPESAFE_MODEL", "jev-latest"),
+                                 "jev": reported_model(),
                                  "llm": os.environ.get("TEXT_MODEL", "deepseek-chat")},
                              "source_parameters": turns, "lane_schedule": "parallel within each turn",
                              "turn_watchdog_seconds": timeout},
@@ -144,6 +145,7 @@ if __name__ == "__main__":
     parser.add_argument("--turn-timeout", type=float, default=600)
     options = parser.parse_args()
     load_env_file()
-    if not all(os.environ.get(key) for key in ("TYPESAFE_API_KEY", "DEEPSEEK_API_KEY")):
-        raise SystemExit("Missing model credentials")
+    missing = [key for key in required_credentials() if not os.environ.get(key)]
+    if missing:
+        raise SystemExit("Missing model credentials: " + ", ".join(missing))
     raise SystemExit(0 if asyncio.run(rerun(source_turns(), options.out, options.turn_timeout)) else 1)

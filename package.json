@@ -4,7 +4,7 @@
   "version": "0.0.1",
   "license": "Apache-2.0",
   "scripts": {
-    "dev": "concurrently -n api,web -c blue,magenta \"uv run --project backend jevloop serve --port 8790\" \"pnpm --filter jevloop-web dev\"",
+    "dev": "concurrently -n laya,api,web -c yellow,blue,magenta \"uv run --project backend jevloop laya-serve --host 127.0.0.1 --port 8791\" \"env LAYA_BASE_URL=http://127.0.0.1:8791 uv run --project backend jevloop serve --port 8790\" \"pnpm --filter jevloop-web dev\"",
     "build:frontend": "pnpm --filter jevloop-web build",
     "serve": "uv run --project backend jevloop serve --port 8790",
     "test": "uv run --project backend pytest backend/tests -q"

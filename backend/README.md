@@ -14,6 +14,20 @@ uv run pytest
 uv run jevloop serve --port 8790
 ```
 
+Local Laya uses an optional extra in this same uv environment. It is not
+installed by a plain `uv sync`, and it should not be installed into another
+interpreter.
+
+```bash
+uv sync --extra laya-mlx    # Apple Silicon, package laya-mlx
+uv sync --extra laya-cuda   # NVIDIA, package laya[serve]
+uv run jevloop laya-serve   # MLX or CUDA, POST /v1/systemone
+```
+
+`make dev` starts this server on `127.0.0.1:8791` and sets the dashboard
+process's `LAYA_BASE_URL` to it. The first launch downloads the selected
+checkpoints into the uv environment's Hugging Face cache.
+
 Normal Dashboard and CLI runs allow sandbox egress so agents can install
 packages and test public services. `jevloop smoke` remains offline;
 `jevloop run --offline-sandbox ...` disables egress explicitly. Containers never

@@ -252,6 +252,21 @@ cp env.example .env
 # Set TYPESAFE_API_KEY and DEEPSEEK_API_KEY.
 ```
 
+To decide with local Laya instead of hosted Jev, install one extra in this
+project's uv environment and start its server. Apple Silicon uses MLX. An
+NVIDIA machine uses CUDA. `DECISION_PROVIDER=laya` then sends the same
+decision request to that server. The console composer also offers the same
+Jev or Laya choice per run. The text model is unchanged.
+
+```bash
+cd backend
+uv sync --extra laya-mlx    # Apple Silicon
+uv sync --extra laya-cuda   # NVIDIA
+```
+
+`make dev` starts that server on `127.0.0.1:8791` and points the dashboard
+API at it. `make stop` stops it with the API and Vite.
+
 Optional Feishu/Lark tools use the current `lark-cli` user identity:
 
 ```bash

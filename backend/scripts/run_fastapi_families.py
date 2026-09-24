@@ -21,6 +21,7 @@ from pathlib import Path
 from jevloop.cli import load_env_file
 from jevloop.contracts.arguments import arguments_complete, validate_arguments
 from jevloop.contracts.policy import InvalidProposal
+from jevloop.decision.laya import required_credentials
 from jevloop.evaluation import bench
 from jevloop.tools.sandbox import SPECS, workspace_volume_name
 
@@ -274,6 +275,7 @@ if __name__ == "__main__":
     parser.add_argument("--out", type=Path, required=True)
     options = parser.parse_args()
     load_env_file()
-    if not all(os.environ.get(key) for key in ("TYPESAFE_API_KEY", "DEEPSEEK_API_KEY")):
-        raise SystemExit("Missing model credentials")
+    missing = [key for key in required_credentials() if not os.environ.get(key)]
+    if missing:
+        raise SystemExit("Missing model credentials: " + ", ".join(missing))
     raise SystemExit(0 if asyncio.run(run(options.out)) else 1)
