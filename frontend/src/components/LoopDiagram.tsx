@@ -1,6 +1,7 @@
-import { useId } from "react";
+import { memo, useId } from "react";
+import { modelName } from "../diagramModel";
 import { useLang } from "../i18n";
-import type { LaneState, Step } from "../types";
+import type { DecisionProvider, LaneState, Step } from "../types";
 import { loopView, type LoopNode } from "../loopView";
 import { DecisionFlow } from "./DecisionFlow";
 
@@ -14,9 +15,10 @@ const nodes: { id: LoopNode; x: number; y: number; en: string; zh: string; hint:
   { id: "evidence", x: 230, y: 439, en: "Recorded evidence", zh: "记录执行证据", hint: "APPEND TO TRANSCRIPT", tone: "evidence" },
 ];
 
-function Circuit({ view, baseline, id }: { view: View; baseline: boolean; id: string }) {
+const Circuit = memo(function Circuit({ view, baseline, id, model }: { view: View; baseline: boolean; id: string; model: DecisionProvider }) {
   const { lang } = useLang();
-  const nodeName = (key: LoopNode) => baseline && key === "decision" ? (lang === "zh" ? "LLM 决策" : "LLM decision") : nodes.find((node) => node.id === key)?.[lang];
+  const name = modelName(model);
+  const nodeName = (key: LoopNode) => baseline && key === "decision" ? (lang === "zh" ? "LLM 决策" : "LLM decision") : key === "decision" ? (lang === "zh" ? `${name} 决策路由` : `${name}-led routing`) : nodes.find((node) => node.id === key)?.[lang];
   const edges: { from: LoopNode; to: LoopNode; d: string }[] = [
     { from: "state", to: "decision", d: "M230 74 V110" },
     ...(baseline ? [{ from: "decision" as const, to: "kernel" as const, d: "M230 168 V310" }] : [
@@ -30,7 +32,7 @@ function Circuit({ view, baseline, id }: { view: View; baseline: boolean; id: st
   ];
   return <svg viewBox="0 0 460 494" className="loop-circuit" role="img"
     aria-labelledby={`${id}-title ${id}-description`}>
-    <title id={`${id}-title`}>{lang === "zh" ? (baseline ? "LLM 基线执行流程" : "Jev 与 LLM 协作执行流程") : baseline ? "LLM-only execution flow" : "Jev and LLM execution flow"}</title>
+    <title id={`${id}-title`}>{lang === "zh" ? (baseline ? "LLM 基线执行流程" : `${name} 与 LLM 协作执行流程`) : baseline ? "LLM-only execution flow" : `${name} and LLM execution flow`}</title>
     <desc id={`${id}-description`}>{lang === "zh" ? "活动节点" : "Active node"}: {view.active ? nodeName(view.active) : "—"}. {lang === "zh" ? "记录路径" : "Recorded path"}: {view.route.map(nodeName).join(" → ") || "—"}.</desc>
     <defs>
       <pattern id={`${id}-grid`} width="20" height="20" patternUnits="userSpaceOnUse">
@@ -45,7 +47,7 @@ function Circuit({ view, baseline, id }: { view: View; baseline: boolean; id: st
       const moving = view.active === edge.to && (edge.to !== "kernel" || baseline);
       return <g key={`${edge.from}-${edge.to}`} className={`circuit-edge ${known ? "is-recorded" : ""} ${moving ? "is-moving" : ""}`}>
         <path d={edge.d} />
-        <path d={edge.d} className="signal-packet" />
+        {moving && <path d={edge.d} className="signal-packet" />}
       </g>;
     })}
     {baseline && <text x="244" y="239" className="circuit-caption">{lang === "zh" ? "决策 + 参数生成" : "DECIDE + GENERATE"}</text>}
@@ -54,7 +56,7 @@ function Circuit({ view, baseline, id }: { view: View; baseline: boolean; id: st
       const recorded = view.route.includes(node.id);
       const isDecision = node.id === "decision";
       const tone = baseline && isDecision ? "llm" : node.tone;
-      const title = baseline && isDecision ? (lang === "zh" ? "LLM 决策" : "LLM decision") : node[lang];
+      const title = baseline && isDecision ? (lang === "zh" ? "LLM 决策" : "LLM decision") : isDecision ? (lang === "zh" ? `${name} 决策路由` : `${name}-led routing`) : node[lang];
       return <g key={node.id} transform={`translate(${node.x - 82} ${node.y - 29})`}
         className={`circuit-node tone-${tone} ${active ? "is-active" : ""} ${recorded ? "is-recorded" : ""} ${node.id === "kernel" && view.blocked ? "is-blocked" : ""}`}>
         <rect className="node-glow" x="-3" y="-3" width="170" height="64" rx="8" />
@@ -67,18 +69,21 @@ function Circuit({ view, baseline, id }: { view: View; baseline: boolean; id: st
       </g>;
     })}
   </svg>;
-}
+}, (a, b) => a.baseline === b.baseline && a.id === b.id && a.model === b.model
+  && a.view.status === b.view.status && a.view.active === b.view.active
+  && a.view.blocked === b.view.blocked && a.view.route.join() === b.view.route.join());
 
-export function LoopDiagram({ state, baseline = false, live, connected, done, error, step, sceneKey = "default" }: {
+function LoopDiagramView({ state, baseline = false, live, connected, done, error, step, sceneKey = "default", model = "jev" }: {
   state?: LaneState; baseline?: boolean; live: boolean; connected: boolean;
   done: boolean; error: boolean; step?: Step;
-  sceneKey?: string;
+  sceneKey?: string; model?: DecisionProvider;
 }) {
   const id = useId().replaceAll(":", "");
   const view = loopView(state, { baseline, live, connected, done, error, step });
   const frame = !step ? state?.decisionFrame : undefined;
   const frameOperation = frame?.finalOperation ?? (typeof frame?.response?.operation === "string" ? frame.response.operation : undefined);
   const { lang } = useLang();
+  const name = modelName(model);
   const statuses: Record<View["status"], [string, string]> = {
     ready: ["READY", "就绪"], recorded: ["RECORDED", "历史记录"], live: ["LIVE", "实时"],
     waiting: ["WAITING", "等待事件"], paused: ["PAUSED", "已暂停"], error: ["ERROR", "出错"],
@@ -86,11 +91,14 @@ export function LoopDiagram({ state, baseline = false, live, connected, done, er
   };
   return <section className={`diagram-lane ${baseline ? "baseline-lane" : "jev-lane"}`} data-testid={`loop-${baseline ? "baseline" : "jev"}`}>
     <div className="diagram-lane-heading">
-      <div><span className="eyebrow">{baseline ? "LLM ONLY" : "JEV + LLM"}</span><h3>{baseline ? (lang === "zh" ? "基线循环" : "Baseline loop") : "JevLoop"}</h3></div>
+      <div><span className="eyebrow">{baseline ? "LLM ONLY" : `${name.toUpperCase()} + LLM`}</span><h3>{baseline ? (lang === "zh" ? "基线循环" : "Baseline loop") : `${name}Loop`}</h3></div>
       <span className={`console-status status-${view.status}`}><i />{statuses[view.status][lang === "zh" ? 1 : 0]}</span>
     </div>
-    {baseline ? <Circuit view={view} baseline={baseline} id={id} /> : <DecisionFlow sceneKey={sceneKey} view={view}
-      frame={frame} step={view.step} />}
+    {baseline ? <Circuit view={view} baseline={baseline} id={id} model={model} /> : <DecisionFlow sceneKey={sceneKey} view={view}
+      frame={frame} step={view.step} model={model} />}
     <div className="lane-footnote"><span className="signal-dot" />{frame ? frameOperation ?? (lang === "zh" ? "本轮等待选择" : "Awaiting this attempt’s choice") : view.step?.decision.operation ?? (lang === "zh" ? "等待首个决策" : "Awaiting first decision")}</div>
   </section>;
 }
+
+// A lane untouched by a stream event keeps its state reference; skip its render.
+export const LoopDiagram = memo(LoopDiagramView);

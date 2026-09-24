@@ -1,6 +1,7 @@
-import type { LanePhase, LaneState, Metrics, ModelCall } from "./types";
+import type { DecisionProvider, LanePhase, LaneState, Metrics, ModelCall } from "./types";
 import type { StreamData } from "./stream";
-import { lanePhase } from "./lane";
+import { lanePhase } from "./lane.ts";
+import { diagramModel } from "./diagramModel.ts";
 
 export interface SessionComparison {
   turns: number;
@@ -8,6 +9,8 @@ export interface SessionComparison {
   jev: LaneState;
   baseline: LaneState;
   phases: { jev: LanePhase; baseline: LanePhase };
+  /** the decision model of the latest paired turn; a session may mix */
+  model: DecisionProvider;
 }
 
 const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
@@ -132,5 +135,6 @@ export function aggregateSessionComparison(turns: StreamData[]): SessionComparis
       jev: lanePhase("jev", jev, errors, done),
       baseline: lanePhase("baseline", baseline, errors, done),
     },
+    model: diagramModel(paired.at(-1)?.params, "jev"),
   };
 }

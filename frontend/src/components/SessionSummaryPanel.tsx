@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { SessionComparison } from "../comparison";
+import { modelName } from "../diagramModel";
 import { useT } from "../i18n";
 import { CompareTable } from "./CompareTable";
 import { EscalationStatsBlock } from "./PairedTurn";
@@ -12,6 +13,7 @@ import { EscalationStatsBlock } from "./PairedTurn";
 export function SessionSummaryPanel({ comparison }: { comparison: SessionComparison }) {
   const t = useT();
   const [open, setOpen] = useState(false);
+  const name = modelName(comparison.model);
   const jm = comparison.jev.metrics;
   const bm = comparison.baseline.metrics;
   return (
@@ -33,7 +35,7 @@ export function SessionSummaryPanel({ comparison }: { comparison: SessionCompari
           <span className="flex flex-wrap gap-1.5 text-[11px] font-medium text-ink2">
             <span className="num rounded-full bg-surface px-2 py-0.5">
               {t("sessionLaneSummary", {
-                lane: t("jevLane"),
+                lane: `${name}Loop`,
                 time: `${(jm.elapsed_ms / 1000).toFixed(1)}s`,
                 cost: jm.est_cost_usd,
               })}
@@ -55,11 +57,13 @@ export function SessionSummaryPanel({ comparison }: { comparison: SessionCompari
             jev={comparison.jev}
             baseline={comparison.baseline}
             phases={comparison.phases}
+            model={comparison.model}
           />
         </div>
         <EscalationStatsBlock
           states={{ jev: comparison.jev, baseline: comparison.baseline }}
           titleKey="sessionEscalationsTitle"
+          model={comparison.model}
         />
       </div>
     </details>

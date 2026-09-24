@@ -1,4 +1,5 @@
-import type { DecisionFrame, Step } from "./types";
+import type { DecisionFrame, DecisionProvider, Step } from "./types";
+import { modelName } from "./diagramModel.ts";
 
 export interface CandidateOption {
   key: string;
@@ -23,17 +24,18 @@ const str = (value: unknown): string | null => typeof value === "string" ? value
 const detail = (value: unknown): string => typeof value === "string" ? value : value == null ? "" : JSON.stringify(value, null, 2);
 
 /** Presentation only: these milestones are not additional transcript records. */
-export function liveDecision(frame: DecisionFrame, zh: boolean) {
+export function liveDecision(frame: DecisionFrame, zh: boolean, provider: DecisionProvider = "jev") {
+  const name = modelName(provider);
   const candidates = candidateView(undefined, frame);
   const lines: string[] = [];
   if (frame.questions) {
     const requested = candidateView(undefined, { ...frame, response: undefined }).submitted;
     const count = requested.reduce((sum, question) => sum + question.options.length, 0);
-    lines.push(zh ? `已发送 ${requested.length} 组、${count} 个候选给 Jev` : `Sent ${requested.length} groups / ${count} candidates to Jev`);
+    lines.push(zh ? `已发送 ${requested.length} 组、${count} 个候选给 ${name}` : `Sent ${requested.length} groups / ${count} candidates to ${name}`);
   }
   if (frame.response) {
     const selected = candidates.cards.filter((card) => card.consumed && card.selected).map((card) => card.selected).join(" → ");
-    lines.push(zh ? `Jev 已返回${selected ? `：${selected}` : ""}` : `Jev returned${selected ? `: ${selected}` : ""}`);
+    lines.push(zh ? `${name} 已返回${selected ? `：${selected}` : ""}` : `${name} returned${selected ? `: ${selected}` : ""}`);
   }
   if (frame.llm) {
     const kind = frame.llm.kind === "arbitration" ? (zh ? "LLM 复核" : "LLM review") : frame.llm.kind === "parameter_authoring" ? (zh ? "LLM 补参" : "LLM parameters") : (zh ? "LLM 撰写" : "LLM authoring");

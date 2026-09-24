@@ -175,6 +175,7 @@ button:disabled { cursor: not-allowed; opacity: .4; }
 .flow-svg-node.is-active .flow-node-visual { transform: scale(1.04); }
 .flow-port { fill: var(--node-tone); }
 .flow-annotation { font: 11px var(--font-mono); fill: var(--color-ink2); letter-spacing: .15px; }
+.flow-stage-time { font: 11px var(--font-mono); fill: var(--node-tone); letter-spacing: .1px; paint-order: stroke; stroke: var(--console-panel); stroke-width: 4px; stroke-linejoin: round; }
 .flow-fan-label { font: 11px var(--font-mono); fill: var(--color-ink2); letter-spacing: .2px; }
 .flow-fan { transition: opacity .24s ease; }
 .flow-fan.is-muted { opacity: .48; }
@@ -363,6 +364,11 @@ button:disabled { cursor: not-allowed; opacity: .4; }
   .node-surface, .node-glow, .circuit-edge path, .orbit-ring { transition: none !important; }
 }
 @media (max-width: 767px) {
+  .execution-workspace[data-layout="columns"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: minmax(0, 1fr) auto minmax(220px, 46vh) !important;
+  }
+  .execution-workspace[data-layout="columns"] .workspace-divider { display: none; }
   .workspace-flow .console-content { padding: 8px; }
   .workspace-flow .console-heading > .eyebrow { font-size: 8px; letter-spacing: .5px; }
   .workspace-goal { display: none; }

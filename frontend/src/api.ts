@@ -22,6 +22,12 @@ export async function control(runId: string, action: string): Promise<void> {
   });
 }
 
+export async function fetchConfig(): Promise<{ decision_provider?: "jev" | "laya" }> {
+  const res = await fetch("/api/config");
+  if (!res.ok) return {};
+  return await res.json();
+}
+
 export async function fetchRuns(): Promise<RunSummary[]> {
   const res = await fetch("/api/runs");
   if (!res.ok) return [];

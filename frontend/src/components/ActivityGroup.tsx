@@ -1,6 +1,7 @@
-import type { Lane, LanePhase, LaneState } from "../types";
+import type { DecisionProvider, Lane, LanePhase, LaneState } from "../types";
 import { useLang, useT } from "../i18n";
 import { liveDecision } from "../candidateView";
+import { modelName } from "../diagramModel";
 import { useLiveElapsedMs } from "../hooks";
 import { escalationStats, LANE_INFO } from "../lane";
 import { ActivityRow } from "./ActivityRow";
@@ -14,7 +15,7 @@ const LANE_ICON: Record<Lane, string> = { jev: "⚡", baseline: "🤖" };
  *  answer once it lands; and — once final metrics land — a one-line footer
  *  summarising the lane's cost profile. Used full-width for single-lane
  *  turns and as one half of a paired turn's side-by-side lanes. */
-export function ActivityGroup({ lane, state, phase, error, onContinue, onAbort, compact = false, historical = false }: {
+export function ActivityGroup({ lane, state, phase, error, onContinue, onAbort, compact = false, historical = false, model = "jev" }: {
   lane: Lane;
   state: LaneState | undefined;
   phase: LanePhase;
@@ -23,10 +24,12 @@ export function ActivityGroup({ lane, state, phase, error, onContinue, onAbort, 
   onAbort?: () => void;
   compact?: boolean;
   historical?: boolean;
+  model?: DecisionProvider;
 }) {
   const t = useT();
   const { lang } = useLang();
-  const milestones = state?.decisionFrame ? liveDecision(state.decisionFrame, lang === "zh") : [];
+  const name = modelName(model);
+  const milestones = state?.decisionFrame ? liveDecision(state.decisionFrame, lang === "zh", model) : [];
   const live = phase === "running" || phase === "awaiting";
   const elapsedMs = useLiveElapsedMs(state?.metrics?.elapsed_ms ?? null, live && !historical);
   const metrics = state?.metrics ?? null;
@@ -40,7 +43,7 @@ export function ActivityGroup({ lane, state, phase, error, onContinue, onAbort, 
   const activity = state?.activity;
   const activityLabel = activity
     ? t(`activity_${activity.stage}`, {
-      lane: t(LANE_INFO[lane].titleKey),
+      lane: lane === "jev" ? `${name}Loop` : t(LANE_INFO[lane].titleKey),
       operation: activity.operation ?? "",
     })
     : null;
@@ -53,8 +56,8 @@ export function ActivityGroup({ lane, state, phase, error, onContinue, onAbort, 
     >
       <header className={`flex flex-wrap items-center gap-2 border-b border-line ${compact ? "px-3 py-2" : "px-3.5 py-2.5"}`}>
         <span aria-hidden className="text-base leading-none">{LANE_ICON[lane]}</span>
-        <h3 className={`font-bold ${compact ? "text-xs" : "text-sm"}`}>{t(LANE_INFO[lane].titleKey)}</h3>
-        <span className="hidden text-[11px] text-ink2 sm:inline">{t(LANE_INFO[lane].subKey)}</span>
+        <h3 className={`font-bold ${compact ? "text-xs" : "text-sm"}`}>{lane === "jev" ? `${name}Loop` : t(LANE_INFO[lane].titleKey)}</h3>
+        <span className="hidden text-[11px] text-ink2 sm:inline">{lane === "jev" ? t("jevLaneSub", { model: name }) : t(LANE_INFO[lane].subKey)}</span>
         <PhaseChip phase={phase} />
         {elapsedMs != null && (
           <span className="num rounded-full border border-line px-2 py-0.5 text-xs font-semibold text-ink">
@@ -84,7 +87,7 @@ export function ActivityGroup({ lane, state, phase, error, onContinue, onAbort, 
       <div className="flex flex-col gap-1 px-2 py-2">
         {state?.steps.length ? (
           state.steps.map((step, i) => (
-            <ActivityRow key={i} index={i + 1} step={step} lane={lane} compact={compact} />
+            <ActivityRow key={i} index={i + 1} step={step} lane={lane} compact={compact} modelLabel={name} />
           ))
         ) : !activityLabel ? (
           <p className="px-2 py-4 text-center text-xs text-ink2">
@@ -140,6 +143,7 @@ export function ActivityGroup({ lane, state, phase, error, onContinue, onAbort, 
                   direct: directSteps,
                   reviewed: esc.count,
                   time: `${(metrics.elapsed_ms / 1000).toFixed(1)}s`,
+                  model: name,
                 })
                 : t("baselineMetricSummary", {
                   steps: decisionSteps,
@@ -149,7 +153,7 @@ export function ActivityGroup({ lane, state, phase, error, onContinue, onAbort, 
           </summary>
           <div className="grid gap-2 border-t border-line px-3.5 py-3 text-xs sm:grid-cols-2 lg:grid-cols-3">
             {lane === "jev" && (
-              <MetricItem label={t("metricJevCalls")} value={`${metrics.jev.calls}`} />
+              <MetricItem label={t("metricJevCalls", { model: name })} value={`${metrics.jev.calls}`} />
             )}
             <MetricItem label={t("metricLlmCalls")} value={`${metrics.helper.calls}`} />
             {lane === "jev" && (
@@ -157,7 +161,7 @@ export function ActivityGroup({ lane, state, phase, error, onContinue, onAbort, 
             )}
             {lane === "jev" && (
               <MetricItem
-                label={t("metricJevTokens")}
+                label={t("metricJevTokens", { model: name })}
                 value={`${metrics.jev.input_tokens} ↑ / ${metrics.jev.output_tokens} ↓`}
               />
             )}

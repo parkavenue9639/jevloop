@@ -1,5 +1,7 @@
 import { useState } from "react";
 import type { ChatApi } from "../chat";
+import { diagramModel, modelName } from "../diagramModel";
+import { useDecisionChoice } from "../decisionChoice";
 import type { Lane, LaneState } from "../types";
 import type { StreamData } from "../stream";
 import { useLang } from "../i18n";
@@ -8,13 +10,13 @@ import { formatCost, formatTime, loopView } from "../loopView";
 import { LoopDiagram } from "./LoopDiagram";
 import { ActivityRow } from "./ActivityRow";
 
-function Meter({ title, jev, baseline, format }: {
-  title: string; jev?: number | null; baseline?: number | null; format: (value: number | null | undefined) => string;
+function Meter({ title, jev, baseline, format, label }: {
+  title: string; jev?: number | null; baseline?: number | null; format: (value: number | null | undefined) => string; label: string;
 }) {
   const max = Math.max(jev ?? 0, baseline ?? 0, Number.EPSILON);
   return <div className="console-meter">
     <div className="meter-title">{title}</div>
-    {([["JevLoop", jev, "jev"], ["LLM-only", baseline, "llm"]] as const).map(([name, value, tone]) => (
+    {([[`${label}Loop`, jev, "jev"], ["LLM-only", baseline, "llm"]] as const).map(([name, value, tone]) => (
       <div className={`meter-row tone-${tone}`} key={name}>
         <span>{name}</span><div className="meter-track"><i style={{ width: `${((value ?? 0) / max) * 100}%` }} /></div><strong>{format(value)}</strong>
       </div>
@@ -22,13 +24,13 @@ function Meter({ title, jev, baseline, format }: {
   </div>;
 }
 
-function Telemetry({ state }: { state?: LaneState }) {
+function Telemetry({ state, decisionLabel }: { state?: LaneState; decisionLabel: string }) {
   const { lang } = useLang();
   const m = state?.metrics;
   const routing = m?.routing;
   const hit = m && m.helper.input_tokens > 0 ? m.helper.cache_hit_tokens / m.helper.input_tokens : null;
   return <div className="telemetry-grid">
-    <div><span>{lang === "zh" ? "Jev 调用" : "Jev calls"}</span><strong>{m?.jev.calls ?? "—"}</strong></div>
+    <div><span>{lang === "zh" ? `${decisionLabel} 调用` : `${decisionLabel} calls`}</span><strong>{m?.jev.calls ?? "—"}</strong></div>
     <div><span>{lang === "zh" ? "LLM 调用" : "LLM calls"}</span><strong>{m?.helper.calls ?? "—"}</strong></div>
     <div><span>{lang === "zh" ? "无 LLM 步骤" : "LLM-free steps"}</span><strong>{routing ? `${routing.direct_jev_steps}/${routing.jev_steps}` : "—"}</strong></div>
     <div><span>{lang === "zh" ? "输入缓存命中" : "Input cache hit"}</span><strong>{hit == null ? "—" : `${(hit * 100).toFixed(1)}%`}</strong></div>
@@ -43,6 +45,8 @@ function Inspector({ data, live, replaying, scope, sceneKey }: { data: StreamDat
   const [inspectOpen, setInspectOpen] = useState(false);
   const jev = data.lanes.jev;
   const base = data.lanes.baseline;
+  const decision = diagramModel(data.params, useDecisionChoice().provider);
+  const decisionLabel = modelName(decision);
   // Reserve the baseline lane from metadata, before its first event arrives.
   const paired = data.params?.profile === "paired_shadow" || !!base;
   const connected = replaying || data.connection === "connected";
@@ -56,8 +60,8 @@ function Inspector({ data, live, replaying, scope, sceneKey }: { data: StreamDat
   return <>
     <div className="console-grid">
       <section className="console-panel topology-panel">
-        <div className="panel-heading"><span className="eyebrow">{lang === "zh" ? "执行拓扑" : "EXECUTION TOPOLOGY"}</span><span className="topology-legend"><i className="tone-jev" />Jev<i className="tone-llm" />LLM<i className="tone-tool" />{lang === "zh" ? "内核" : "Kernel"}</span></div>
-        <div className="graph-step-picker"><label htmlFor="jev-iteration">{lang === "zh" ? "Jev 循环步骤" : "JEV ITERATION"}</label><select id="jev-iteration" disabled={replaying || !jev?.steps.length} aria-label={lang === "zh" ? "Jev 循环步骤" : "Jev iteration"}
+        <div className="panel-heading"><span className="eyebrow">{lang === "zh" ? "执行拓扑" : "EXECUTION TOPOLOGY"}</span><span className="topology-legend"><i className="tone-jev" />{decisionLabel}<i className="tone-llm" />LLM<i className="tone-tool" />{lang === "zh" ? "内核" : "Kernel"}</span></div>
+        <div className="graph-step-picker"><label htmlFor="jev-iteration">{lang === "zh" ? `${decisionLabel} 循环步骤` : `${decisionLabel.toUpperCase()} ITERATION`}</label><select id="jev-iteration" disabled={replaying || !jev?.steps.length} aria-label={lang === "zh" ? `${decisionLabel} 循环步骤` : `${decisionLabel} iteration`}
           value={selected?.lane === "jev" ? selected.index : selected ? "baseline" : ""} onChange={(event) => { setSelected(event.target.value === "" ? null : { lane: "jev", index: Number(event.target.value) }); setInspectOpen(false); }}>
           <option value="">{lang === "zh" ? "跟随最新" : "Follow latest"}</option>
           {selected?.lane === "baseline" && <option value="baseline" disabled>{lang === "zh" ? "回看基线步骤" : "Inspecting baseline step"} {selected.index + 1}</option>}
@@ -65,6 +69,7 @@ function Inspector({ data, live, replaying, scope, sceneKey }: { data: StreamDat
         </select>{selected && <button className="console-text-button" onClick={() => { setSelected(null); setInspectOpen(false); }}>{lang === "zh" ? "跟随最新" : "Follow latest"}</button>}</div>
         <div className={`diagram-grid ${paired ? "is-paired" : ""}`}>
           {lanes.map((lane) => <LoopDiagram key={lane} state={data.lanes[lane]} baseline={lane === "baseline"}
+            model={decision}
             sceneKey={sceneKey}
             live={live && !selected} connected={connected} done={data.done} error={!!laneErrorMessage(lane, data)}
             step={selected?.lane === lane ? selectedStep : undefined} />)}
@@ -75,11 +80,11 @@ function Inspector({ data, live, replaying, scope, sceneKey }: { data: StreamDat
       <details className="console-panel telemetry-disclosure"><summary>{lang === "zh" ? "展开遥测与指标" : "Telemetry & metrics"}</summary><aside className="telemetry-panel">
         <div className="panel-heading"><span className="eyebrow">{lang === "zh" ? "双路遥测" : "RUN TELEMETRY"}</span><span className="telemetry-mark">{base ? "A / B" : "A"}</span></div>
         <div className="telemetry-intro"><span>{metricScope}</span><h3>{lang === "zh" ? "观察每一次决策。" : "Every decision, visible."}</h3></div>
-        <Meter title={lang === "zh" ? "累计耗时" : "Elapsed time"} jev={jev?.metrics?.elapsed_ms} baseline={base?.metrics?.elapsed_ms} format={formatTime} />
-        <Meter title={lang === "zh" ? "预估成本 / USD" : "Estimated cost / USD"} jev={jev?.metrics?.est_cost_usd} baseline={base?.metrics?.est_cost_usd} format={formatCost} />
-        <Meter title={lang === "zh" ? "已记录步骤" : "Recorded steps"} jev={jev ? jev.steps.length : null} baseline={base ? base.steps.length : null} format={(n) => n == null ? "—" : String(n)} />
+        <Meter title={lang === "zh" ? "累计耗时" : "Elapsed time"} jev={jev?.metrics?.elapsed_ms} baseline={base?.metrics?.elapsed_ms} format={formatTime} label={decisionLabel} />
+        <Meter title={lang === "zh" ? "预估成本 / USD" : "Estimated cost / USD"} jev={jev?.metrics?.est_cost_usd} baseline={base?.metrics?.est_cost_usd} format={formatCost} label={decisionLabel} />
+        <Meter title={lang === "zh" ? "已记录步骤" : "Recorded steps"} jev={jev ? jev.steps.length : null} baseline={base ? base.steps.length : null} format={(n) => n == null ? "—" : String(n)} label={decisionLabel} />
         <div className="telemetry-label">JEVLOOP / {lang === "zh" ? "路由与缓存" : "ROUTING & CACHE"}</div>
-        <Telemetry state={jev} />
+        <Telemetry state={jev} decisionLabel={decisionLabel} />
         <div className="telemetry-caveat">{lang === "zh" ? "直通仅表示未调用 LLM，不代表工具成功。比较质量请查看两路输出。" : "LLM-free does not mean successful execution. Compare both outputs to judge quality."}</div>
       </aside></details>
     </div>
@@ -92,11 +97,11 @@ function Inspector({ data, live, replaying, scope, sceneKey }: { data: StreamDat
           {!rows.length && <div className="trace-empty">{lang === "zh" ? "发送目标或选择历史会话，查看真实决策路径。" : "Send a goal or select a session to inspect real decision paths."}</div>}
           {rows.map(({ lane, step, index }) => {
             const route = loopView(undefined, { live: false, connected: false, done: false, error: false, baseline: lane === "baseline", step });
-            const routeLabel = step.denied ? (lang === "zh" ? "拦截" : "BLOCKED") : step.aborted ? (lang === "zh" ? "中止" : "ABORTED") : lane === "baseline" ? "LLM" : route.assisted ? "JEV + LLM" : route.direct ? (lang === "zh" ? "无 LLM" : "NO LLM") : "—";
+            const routeLabel = step.denied ? (lang === "zh" ? "拦截" : "BLOCKED") : step.aborted ? (lang === "zh" ? "中止" : "ABORTED") : lane === "baseline" ? "LLM" : route.assisted ? `${decisionLabel.toUpperCase()} + LLM` : route.direct ? (lang === "zh" ? "无 LLM" : "NO LLM") : "—";
             const chosen = selected?.lane === lane && selected.index === index;
             return <button key={`${lane}-${index}`} disabled={replaying} className={`trace-row ${chosen ? "is-selected" : ""}`} aria-pressed={chosen}
               onClick={() => { setSelected({ lane, index }); setInspectOpen(true); }}>
-              <span className={`trace-lane ${lane}`}>{lane === "jev" ? "JEV" : "LLM"}</span>
+              <span className={`trace-lane ${lane}`}>{lane === "jev" ? decisionLabel.toUpperCase() : "LLM"}</span>
               <span className="trace-index">{String(index + 1).padStart(2, "0")}</span>
               <strong title={step.decision.operation}>{step.decision.operation}</strong>
               <span className={`trace-route ${step.denied || step.aborted ? "is-blocked" : ""}`}>{routeLabel}</span>
@@ -116,7 +121,7 @@ function Inspector({ data, live, replaying, scope, sceneKey }: { data: StreamDat
           {data.errors.map((error, index) => <p key={index} className="console-error">{error.lane ?? "stream"}: {error.message}</p>)}
         </div>
       </div>
-      {selectedStep && inspectOpen && <div className="console-step-detail"><ActivityRow step={selectedStep} index={selected!.index + 1} lane={selected!.lane} /></div>}
+      {selectedStep && inspectOpen && <div className="console-step-detail"><ActivityRow step={selectedStep} index={selected!.index + 1} lane={selected!.lane} modelLabel={decisionLabel} /></div>}
     </details>
   </>;
 }

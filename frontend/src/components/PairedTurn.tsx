@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useT } from "../i18n";
+import { diagramModel, modelName } from "../diagramModel";
+import { useDecisionChoice } from "../decisionChoice";
 import { escalationStats, LANE_INFO, laneErrorMessage, lanePhase } from "../lane";
-import type { Lane, LaneState } from "../types";
+import type { DecisionProvider, Lane, LaneState } from "../types";
 import type { ChatApi } from "../chat";
 import { ActivityGroup } from "./ActivityGroup";
 import { CompareTable } from "./CompareTable";
@@ -23,11 +25,13 @@ export function UserBubble({ goal }: { goal: string }) {
 /** Compact adjudication stats for whichever lanes escalated at all. Shared by
  *  the per-turn comparison and the session aggregate; renders nothing when
  *  neither lane escalated. */
-export function EscalationStatsBlock({ states, titleKey }: {
+export function EscalationStatsBlock({ states, titleKey, model = "jev" }: {
   states: Record<Lane, LaneState | undefined>;
   titleKey: string;
+  model?: DecisionProvider;
 }) {
   const t = useT();
+  const name = modelName(model);
   const lanes = (["jev", "baseline"] as const).filter(
     (lane) => escalationStats(states[lane]?.metrics).count > 0,
   );
@@ -40,7 +44,7 @@ export function EscalationStatsBlock({ states, titleKey }: {
           const esc = escalationStats(states[lane]?.metrics);
           return (
             <li key={lane} className="num">
-              <span className="font-medium">{t(LANE_INFO[lane].titleKey)}</span>
+              <span className="font-medium">{lane === "jev" ? `${name}Loop` : t(LANE_INFO[lane].titleKey)}</span>
               {" — "}
               {t("escStatsLine", { n: esc.count, u: esc.upheld, o: esc.overridden })}
             </li>
@@ -60,6 +64,7 @@ export function PairedTurn({ runId, chat }: { runId: string; chat: ChatApi }) {
   const t = useT();
   const data = chat.streamOf(runId);
   const goal = data.params ? String(data.params.goal ?? "") : "";
+  const model = diagramModel(data.params, useDecisionChoice().provider);
   const jev = data.lanes.jev;
   const baseline = data.lanes.baseline;
   const phases = {
@@ -89,9 +94,9 @@ export function PairedTurn({ runId, chat }: { runId: string; chat: ChatApi }) {
             </summary>
             <div className="flex flex-col gap-3 px-2.5 pb-3 sm:px-3.5">
               <div className="overflow-x-auto">
-                <CompareTable jev={jev} baseline={baseline} phases={phases} />
+                <CompareTable jev={jev} baseline={baseline} phases={phases} model={model} />
               </div>
-              <EscalationStatsBlock states={{ jev, baseline }} titleKey="escStatsTitle" />
+              <EscalationStatsBlock states={{ jev, baseline }} titleKey="escStatsTitle" model={model} />
             </div>
           </details>
         )}
@@ -106,6 +111,7 @@ export function PairedTurn({ runId, chat }: { runId: string; chat: ChatApi }) {
             onAbort={isActive ? chat.abortRun : undefined}
             historical={!isActive}
             compact
+            model={model}
           />
           <ActivityGroup
             lane="baseline"

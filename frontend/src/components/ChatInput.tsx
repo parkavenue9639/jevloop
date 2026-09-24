@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useDecisionChoice } from "../decisionChoice";
 import type { RunParams } from "../types";
 import { useT } from "../i18n";
 import { Icon } from "./Icon";
@@ -32,6 +33,7 @@ export function ChatInput({ disabled, starting, error, onSend }: {
 }) {
   const t = useT();
   const [goal, setGoal] = useState("");
+  const { provider, setProvider: chooseProvider } = useDecisionChoice();
   const [compare, setCompare] = useState(false);
   const [live, setLive] = useState(false);
   const [sandboxNetwork, setSandboxNetwork] = useState(true);
@@ -85,6 +87,7 @@ export function ChatInput({ disabled, starting, error, onSend }: {
       sandbox_network: sandboxNetwork,
       min_confidence: minConfidence ?? 0.6,
       allow_recipients: recipients.split(/[,，]/).map((s) => s.trim()).filter(Boolean),
+      decision_provider: provider,
     });
     setGoal(""); // the pending-goal echo takes over in the transcript
   };
@@ -105,6 +108,9 @@ export function ChatInput({ disabled, starting, error, onSend }: {
     <form onSubmit={onSubmit} className="chat-composer shrink-0 border-t border-line bg-surface">
       <div className="composer-inner mx-auto px-4 py-3">
         {error && <p className="mb-2 text-xs text-critical">{error}</p>}
+        {provider === "laya" && (
+          <p className="mb-2 text-xs text-ink2" data-testid="decision-laya-note">{t("decisionLayaNote")}</p>
+        )}
 
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <label
@@ -125,6 +131,31 @@ export function ChatInput({ disabled, starting, error, onSend }: {
             />
             {t("compareToggle")}
           </label>
+
+          <div
+            className="flex overflow-hidden rounded-xl border border-line"
+            role="radiogroup"
+            aria-label={t("decisionProvider")}
+            data-testid="decision-provider"
+          >
+            {(["jev", "laya"] as const).map((id) => (
+              <button
+                key={id}
+                type="button"
+                role="radio"
+                aria-checked={provider === id}
+                data-testid={`decision-${id}`}
+                disabled={disabled}
+                title={id === "laya" ? t("decisionLayaHelp") : undefined}
+                onClick={() => chooseProvider(id)}
+                className={`px-3 py-1 text-sm font-semibold transition-colors ${
+                  provider === id ? "bg-accent/15 text-accent" : "text-ink2 hover:text-ink"
+                } disabled:opacity-50`}
+              >
+                {id === "jev" ? t("decisionJev") : t("decisionLaya")}
+              </button>
+            ))}
+          </div>
 
           <div className="relative ml-auto" ref={popRef}>
             <button
