@@ -8,6 +8,8 @@ export const emptyLane = (): LaneState => ({
 /** Everything derived from one run's event stream. `useRunStream` keeps this
  *  in React state; the conversation model snapshots it when a turn retires. */
 export interface StreamData {
+  /** Transport state is presentation-only; historical JSON replay has none. */
+  connection?: "connecting" | "connected" | "reconnecting" | "closed";
   lanes: Partial<Record<Lane, LaneState>>;
   errors: LaneError[];
   done: boolean;
@@ -43,10 +45,31 @@ export function applyRunEvent(data: StreamData, payload: RunEvent): StreamData {
     case "attempt_started":
       return patch(data, payload.lane ?? "jev", (l) => ({
         ...l, awaiting: false, activity: { stage: "deciding" },
+        decisionFrame: { attemptId: payload.attempt_id, step: payload.step },
       }));
+    case "jev_request":
+    case "jev_response":
+      return patch(data, payload.lane ?? "jev", (l) => {
+        if (l.finished || l.decisionFrame?.attemptId !== payload.attempt_id) return l;
+        return { ...l, decisionFrame: { ...l.decisionFrame,
+          ...(payload.type === "jev_request" ? { questions: payload.questions } : { response: payload.response }),
+        } };
+      });
+    case "llm_started":
+    case "llm_completed":
+      return patch(data, payload.lane ?? "jev", (l) => {
+        if (l.finished || l.decisionFrame?.attemptId !== payload.attempt_id) return l;
+        return { ...l, activity: payload.type === "llm_started" ? { stage: "authoring", operation: payload.operation } : null,
+          decisionFrame: { ...l.decisionFrame, llm: { kind: payload.kind, operation: payload.operation, reason: payload.reason,
+            status: payload.type === "llm_started" ? "running" : payload.status } } };
+      });
     case "decision_ready":
       return patch(data, payload.lane ?? "jev", (l) => ({
         ...l,
+        decisionFrame: l.decisionFrame?.attemptId === payload.attempt_id ? {
+          ...l.decisionFrame, finalOperation: payload.operation, finalBinding: payload.binding_mode,
+          needsAuthoring: payload.needs_authoring, escalated: payload.escalated,
+        } : l.decisionFrame,
         activity: {
           stage: payload.needs_authoring ? "authoring" : "preparing",
           operation: payload.operation,
@@ -55,6 +78,7 @@ export function applyRunEvent(data: StreamData, payload: RunEvent): StreamData {
     case "intent":
       return patch(data, payload.lane ?? "jev", (l) => ({
         ...l, activity: { stage: "preparing", operation: payload.operation },
+        decisionFrame: l.decisionFrame ? { ...l.decisionFrame, committed: payload.operation !== "BLOCKED" } : undefined,
       }));
     case "dispatch_started":
       return patch(data, payload.lane ?? "jev", (l) => ({
@@ -75,6 +99,7 @@ export function applyRunEvent(data: StreamData, payload: RunEvent): StreamData {
       if (!payload.step?.decision) return data;
       return patch(data, payload.lane ?? "jev", (l) => ({
         ...l, steps: [...l.steps, payload.step], awaiting: false, activity: null,
+        decisionFrame: undefined,
       }));
     case "metrics":
       return patch(data, payload.lane ?? "jev", (l) => ({ ...l, metrics: payload.metrics }));

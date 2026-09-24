@@ -33,6 +33,25 @@ Prompt Cache。
 
 JevLoop 是独立的开源项目，由 Jev 提供能力，但不是 TypeSafe 官方产品。
 
+## 看见候选集如何随循环演进
+
+控制台将循环直接可视化：从 transcript 恢复上下文，展示 Jev 候选池，
+高亮生效选择，按需交给 LLM，再将已接受的调用与执行结果分别追加回 transcript。
+
+<a href="docs/assets/decision-topology-zh-CN.svg"><img src="docs/assets/decision-topology-zh-CN.gif" alt="连续两轮真实决策：第 1 轮有 8 组候选问题，文件候选只有 .gitkeep；WRITE_FILE 创建 main.py 后，第 2 轮扩展为 14 组，新增 main.py 和批量选择分支，随后 Jev 选择 ANSWER。主节点保持固定。" width="100%" /></a>
+
+**工具结果成为后续选择**：第 1 轮写入 `main.py`，第 2 轮就能将它作为 READ_FILE
+参数候选，并新增批量选择分支。同一个用户任务中，候选问题从 **8 组扩展到 14 组**。
+
+按 **目的 → 工具 → 参数** 理解候选，不要把每个方框看成依次执行的步骤。
+绿色边框标记本轮新增候选或分支，**不代表选中**；橙色为生效选择，灰色为未消费分支，`固` 表示规则唯一确定。
+两轮均使用 **LLM 补参或撰写，并非无 LLM 直通**。示例使用真实前端组件与脱敏历史事件生成；
+动画按**原始事件日志的 3 倍速**播放（约 4.29 秒 → 1.44 秒，按 GIF 帧取整），
+不构成独立的任务成功或性能结论。
+
+[查看可放大的静态 SVG](docs/assets/decision-topology-zh-CN.svg)
+· [来源事件、阅读说明与重新生成](docs/assets/README.md#decision-topology-replay)
+
 ## 同一个问题，两条 Agent Loop
 
 “帮我新增一个改数据的接口。”这次历史双线运行中，JevLoop 用 **26.4 秒、5 步**

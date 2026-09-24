@@ -17,7 +17,14 @@ from jevloop.contracts.authored import _clean
 from jevloop.contracts.policy import InvalidProposal, MalformedAuthoredValue
 from jevloop.contracts.schemas import llm_tool_schemas
 from jevloop.decision.escalation import arbitrate, latest_recoverable, should_escalate
-from jevloop.decision.model import action_catalog, choose, compile_questions, post_json
+from jevloop.decision.model import (
+    action_catalog,
+    choose,
+    compile_questions,
+    observe,
+    observe_llm_call,
+    post_json,
+)
 
 
 @dataclass(frozen=True)
@@ -27,6 +34,8 @@ class DriverContext:
     transcript: object
     provider: object
     write_min_confidence: float = 0.0
+    attempt_id: str | None = None
+    telemetry: object = None
 
 
 @dataclass
@@ -121,12 +130,22 @@ class JevDriver:
         self.ambiguity_gate = ambiguity_gate
         self.answer_progress_floor = answer_progress_floor
         self._choose = chooser or choose
+        self._uses_default_chooser = chooser is None
         self._adjudicate = adjudicator or arbitrate
 
     async def decide(self, context: DriverContext) -> DriverProposal:
         workspace, provider = context.workspace, context.provider
+        chooser_options = {}
+        if self._uses_default_chooser and context.telemetry is not None:
+            async def request_ready(questions):
+                await observe(context.telemetry, {
+                    "type": "jev_request", "attempt_id": context.attempt_id,
+                    "questions": questions,
+                })
+            chooser_options["on_request"] = request_ready
         jev_decision = await self._choose(
-            workspace, context.goal, workspace.history, provider=provider)
+            workspace, context.goal, workspace.history, provider=provider,
+            **chooser_options)
         compiled = jev_decision.pop("compiled", None)
         model_calls = [{
             "kind": "jev_decision",
@@ -138,6 +157,10 @@ class JevDriver:
                 key: value for key, value in jev_decision.items() if key != "request"
             },
         }]
+        await observe(context.telemetry, {
+            "type": "jev_response", "attempt_id": context.attempt_id,
+            "response": model_calls[0]["response"],
+        })
         threshold = self.escalate_threshold
         selected_spec = next(
             (spec for spec in provider.specs()
@@ -183,7 +206,11 @@ class JevDriver:
             )
 
         actions = action_catalog(workspace, provider)
-        verdict = await self._adjudicate(
+        verdict = await observe_llm_call(
+            context.telemetry, {
+                "attempt_id": context.attempt_id, "kind": "arbitration",
+                "operation": jev_decision["operation"], "reason": reason,
+            }, self._adjudicate,
             context.transcript, jev_decision, provider, actions,
             **({"recovery": recoverable} if recoverable is not None else {}))
         helper = None

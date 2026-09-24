@@ -1,19 +1,20 @@
 import { useEffect, useState } from "react";
-import { LangToggle, useT } from "./i18n";
+import { LangToggle, useLang, useT } from "./i18n";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { useChat } from "./chat";
-import { ChatView } from "./components/ChatView";
 import { HistoryDrawer } from "./components/HistoryDrawer";
-import { aggregateSessionComparison } from "./comparison";
-import { SessionSummaryPanel } from "./components/SessionSummaryPanel";
+import { ExecutionWorkspace } from "./components/ExecutionWorkspace";
+import { ChatInput } from "./components/ChatInput";
+import { Icon } from "./components/Icon";
+import { PlaybackControls } from "./components/PlaybackControls";
 
-/** Layout and orchestration only: header + history rail + the compact live
- *  session aggregate strip + the chat column. Paired turns render both lanes
- *  inline in the transcript (see PairedTurn), so there is no side rail.
- *  All conversation state lives in useChat. */
+/** One stream drives both the graph and conversation; one persistent composer. */
 function App() {
   const t = useT();
   const chat = useChat();
+  const { lang } = useLang();
+  const playbackActive = chat.playback.status !== "idle";
+  const locked = chat.running || chat.canControl || chat.replaying || chat.starting || playbackActive;
   const [historyOpen, setHistoryOpen] = useState(() => {
     try {
       const stored =
@@ -36,12 +37,11 @@ function App() {
   const baselineLane = chat.stream.lanes.baseline;
   const anyAwaiting = !!(jevLane?.awaiting || baselineLane?.awaiting);
 
-  const sessionComparison = aggregateSessionComparison(
-    chat.turns.map((runId) => chat.streamOf(runId)),
-  );
-  const showSummary = sessionComparison != null;
-
-  const statusLabel = chat.starting
+  const statusLabel = playbackActive
+    ? (chat.playback.status === "playing" ? (lang === "zh" ? "历史回放中" : "Replaying history")
+      : chat.playback.status === "paused" ? (lang === "zh" ? "回放已暂停" : "Replay paused")
+        : (lang === "zh" ? "回放结束" : "Replay ended"))
+    : chat.replaying ? (lang === "zh" ? "加载历史记录" : "Loading history") : chat.starting
     ? t("starting")
     : chat.stream.done
       ? t("statusFinished")
@@ -56,31 +56,30 @@ function App() {
               : t("statusReady");
 
   return (
-    <div className="flex h-dvh flex-col">
-      <header className="flex shrink-0 items-center gap-3 border-b border-line bg-surface px-4 py-2.5">
+    <div className="app-shell flex h-dvh flex-col">
+      <header className="app-header">
         <button
           data-testid="history-toggle"
           onClick={() => setHistoryOpen((o) => !o)}
-          className={`rounded-full border px-2 py-1 text-xs font-semibold transition-colors ${
-            historyOpen ? "border-accent text-accent" : "border-line text-ink2 hover:text-ink"
-          }`}
+          className={`icon-button ${historyOpen ? "is-active" : ""}`}
           title={t("historyBtn")}
+          aria-label={t("historyBtn")}
+          aria-expanded={historyOpen}
         >
-          🕘 {t("historyBtn")}
+          <Icon name="history" />
         </button>
-        <h1 className="shrink-0 whitespace-nowrap text-base font-semibold tracking-tight text-ink">
-          JevLoop <span className="script-accent hidden text-lg text-accent sm:inline">by Jev</span>
-        </h1>
-        <span className="num hidden border border-line px-2 py-0.5 text-xs font-medium text-ink2 sm:inline">
+        <h1 className="app-brand"><span className="brand-mark"><Icon name="loop" /></span>JevLoop<span className="brand-subtitle">/ CONSOLE</span></h1>
+        <span className="header-status">
           {statusLabel}
         </span>
         <button
           onClick={chat.newSession}
-          disabled={chat.running || chat.replaying}
-          className="rounded-full border border-line px-2 py-1 text-xs font-semibold text-ink2 transition-colors hover:text-ink disabled:opacity-40"
+          disabled={locked}
+          className="console-button new-session-button"
           title={t("newSession")}
+          aria-label={t("newSession")}
         >
-          ✚ <span className="hidden sm:inline">{t("newSession")}</span>
+          <Icon name="plus" /><span className="hidden sm:inline">{t("newSession")}</span>
         </button>
         <ThemeToggle />
         <LangToggle />
@@ -93,19 +92,12 @@ function App() {
           runs={chat.history}
           currentSessionId={chat.sessionId}
           onPickSession={(sid) => void chat.replaySession(sid)}
-          disabled={chat.running || chat.replaying}
+          disabled={locked}
         />
 
         <main className="flex min-w-0 flex-1 flex-col">
-          {showSummary && (
-            <div className="shrink-0 border-b border-line px-4 py-2">
-              <div className="mx-auto max-w-5xl">
-                <SessionSummaryPanel comparison={sessionComparison} />
-              </div>
-            </div>
-          )}
-
-          <ChatView chat={chat} />
+          <PlaybackControls chat={chat} />
+          <ExecutionWorkspace chat={chat} composer={<ChatInput disabled={locked} starting={chat.starting} error={chat.startError} onSend={(params) => void chat.send(params)} />} />
         </main>
       </div>
     </div>

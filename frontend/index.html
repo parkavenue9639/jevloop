@@ -3,11 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>JevLoop ⚡ agent chat</title>
+    <title>JevLoop — execution console</title>
     <script>
-      // theme before first paint: stored choice wins, otherwise the ivory default
-      document.documentElement.dataset.theme =
-        localStorage.getItem("jevloop.theme") || "light";
+      // Keep explicit preferences; new visitors start in the console's dark theme.
+      try {
+        document.documentElement.dataset.theme = localStorage.getItem("jevloop.theme") || "dark";
+      } catch {
+        document.documentElement.dataset.theme = "dark";
+      }
     </script>
   </head>
   <body>

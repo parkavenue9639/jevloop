@@ -1,16 +1,19 @@
 """Jev client: one request, conditional typed heads, strict path validation."""
 
 import asyncio
+import inspect
 import json
+import logging
 import math
 import os
 import time
+from copy import deepcopy
 from dataclasses import dataclass
 
 import httpx
 
 from jevloop.contracts.arguments import LLM_PARAMETERS, bound_arguments, validate_arguments
-from jevloop.contracts.policy import InvalidProposal, MalformedAuthoredValue
+from jevloop.contracts.policy import EventSinkError, InvalidProposal, MalformedAuthoredValue
 from jevloop.decision.questions import (
     ACTION_PREAMBLE,
     CORE_ACTIONS,
@@ -423,7 +426,44 @@ def _billed_invalid(error, body, result, started):
     return error
 
 
-async def choose(workspace, _goal, _history, provider=None):
+async def observe(callback, payload):
+    """Best-effort, detached presentation telemetry, never decision input.
+
+    Unlike the kernel's durable lifecycle sink, optional observers cannot
+    mutate model requests/results or turn a valid choice into a failure.
+    Cancellation and explicitly durable sink failures still propagate normally.
+    """
+    if callback is None:
+        return
+    try:
+        result = callback(deepcopy(payload))
+        if inspect.isawaitable(result):
+            await result
+    except EventSinkError:
+        raise
+    except Exception as error:  # noqa: BLE001 - optional presentation must not change execution
+        logging.getLogger(__name__).warning(
+            "Optional Jev telemetry observer failed (%s).", type(error).__name__)
+
+
+async def observe_llm_call(observer, metadata, call, *args, **kwargs):
+    """Observe a real helper invocation, not an inferred routing intention.
+
+    Returned means the helper returned, not that its proposal passed the
+    kernel's validation or reached the ledger. Cancellation propagates without
+    claiming a completed call. Metadata contains no messages or authored data.
+    """
+    await observe(observer, {**metadata, "type": "llm_started"})
+    try:
+        result = await call(*args, **kwargs)
+    except Exception:  # Observe, then preserve the original exception.
+        await observe(observer, {**metadata, "type": "llm_completed", "status": "failed"})
+        raise
+    await observe(observer, {**metadata, "type": "llm_completed", "status": "returned"})
+    return result
+
+
+async def choose(workspace, _goal, _history, provider=None, *, on_request=None):
     """Ask Jev once, then validate only the selected conditional path."""
     questions, compiled = compile_questions(workspace, provider)
     state = workspace.state()
@@ -444,6 +484,7 @@ async def choose(workspace, _goal, _history, provider=None):
     }
     if len(json.dumps(body, ensure_ascii=False).encode()) > MAX_REQUEST_BYTES:
         raise InvalidModelResponse("Jev state and questions exceed the invocation budget.")
+    await observe(on_request, questions)
     started = time.perf_counter()
     result = await post_json(ENDPOINT, os.environ["TYPESAFE_API_KEY"], body)
     answers = result.get("answers")

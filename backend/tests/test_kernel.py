@@ -317,6 +317,8 @@ def test_materialized_intent_is_durable_before_dispatch():
         "attempt_id": events[0]["attempt_id"],
         "operation": "WRITE",
         "needs_authoring": False,
+        "binding_mode": None,
+        "escalated": False,
     }
     intent = events[2]
     assert intent["text_length"] == len("payload")

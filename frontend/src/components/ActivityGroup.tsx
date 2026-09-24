@@ -1,5 +1,6 @@
 import type { Lane, LanePhase, LaneState } from "../types";
-import { useT } from "../i18n";
+import { useLang, useT } from "../i18n";
+import { liveDecision } from "../candidateView";
 import { useLiveElapsedMs } from "../hooks";
 import { escalationStats, LANE_INFO } from "../lane";
 import { ActivityRow } from "./ActivityRow";
@@ -13,7 +14,7 @@ const LANE_ICON: Record<Lane, string> = { jev: "⚡", baseline: "🤖" };
  *  answer once it lands; and — once final metrics land — a one-line footer
  *  summarising the lane's cost profile. Used full-width for single-lane
  *  turns and as one half of a paired turn's side-by-side lanes. */
-export function ActivityGroup({ lane, state, phase, error, onContinue, onAbort, compact = false }: {
+export function ActivityGroup({ lane, state, phase, error, onContinue, onAbort, compact = false, historical = false }: {
   lane: Lane;
   state: LaneState | undefined;
   phase: LanePhase;
@@ -21,10 +22,13 @@ export function ActivityGroup({ lane, state, phase, error, onContinue, onAbort, 
   onContinue?: () => void;
   onAbort?: () => void;
   compact?: boolean;
+  historical?: boolean;
 }) {
   const t = useT();
+  const { lang } = useLang();
+  const milestones = state?.decisionFrame ? liveDecision(state.decisionFrame, lang === "zh") : [];
   const live = phase === "running" || phase === "awaiting";
-  const elapsedMs = useLiveElapsedMs(state?.metrics?.elapsed_ms ?? null, live);
+  const elapsedMs = useLiveElapsedMs(state?.metrics?.elapsed_ms ?? null, live && !historical);
   const metrics = state?.metrics ?? null;
   const esc = escalationStats(metrics);
   const decisionSteps = lane === "jev"
@@ -87,6 +91,10 @@ export function ActivityGroup({ lane, state, phase, error, onContinue, onAbort, 
             {phase === "running" || phase === "awaiting" ? t("waitingFirstStep") : t("waitingLane")}
           </p>
         ) : null}
+        {!!milestones.length && <div className="conversation-events" data-testid="live-decision-events">
+          <span className="eyebrow">{lang === "zh" ? "当前步骤 · 已接收事件" : "CURRENT STEP / RECEIVED EVENTS"}</span>
+          {milestones.map((line, index) => <p key={index}>{line}</p>)}
+        </div>}
         {live && activityLabel && (
           <div className="flex items-center gap-2 rounded-xl border border-accent/30 bg-accent/5 px-3 py-2 text-xs text-ink">
             <Spinner className="text-accent" />

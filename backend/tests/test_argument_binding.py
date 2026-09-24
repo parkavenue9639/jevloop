@@ -155,7 +155,7 @@ def test_parameter_helper_is_one_call_locks_only_operation_with_full_catalog():
     assert request["tool_choice"] == "required"
     assert request["tools"] == llm_tool_schemas(SandboxTools())
     assert "src/observed.py" not in request["messages"][-1]["content"]
-    assert "const" not in json.dumps(request["tools"])
+    assert '"const":' not in json.dumps(request["tools"])
     assert "const" not in parameter_schema(spec("READ_FILE"))["properties"]["path"]
 
 

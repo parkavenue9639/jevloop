@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { RunParams } from "../types";
 import { useT } from "../i18n";
+import { Icon } from "./Icon";
 
 const field =
   "w-full resize-y rounded-xl bg-transparent px-1.5 py-1 text-sm text-ink outline-none placeholder:text-ink2";
@@ -101,11 +102,11 @@ export function ChatInput({ disabled, starting, error, onSend }: {
   };
 
   return (
-    <form onSubmit={onSubmit} className="shrink-0 border-t border-line bg-surface">
-      <div className="mx-auto max-w-3xl px-4 py-3">
+    <form onSubmit={onSubmit} className="chat-composer shrink-0 border-t border-line bg-surface">
+      <div className="composer-inner mx-auto px-4 py-3">
         {error && <p className="mb-2 text-xs text-critical">{error}</p>}
 
-        <div className="mb-2 flex items-center gap-2">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
           <label
             className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-1 text-sm font-semibold transition-colors ${
               compare ? "border-accent bg-accent/10 text-accent" : "border-line text-ink2 hover:text-ink"
@@ -131,12 +132,13 @@ export function ChatInput({ disabled, starting, error, onSend }: {
               ref={settingsBtnRef}
               onClick={() => setSettingsOpen((o) => !o)}
               disabled={disabled}
-              className="rounded-xl border border-line px-3 py-1 text-sm text-ink2 transition-colors hover:text-ink disabled:opacity-50"
+              className="console-button"
+              aria-expanded={settingsOpen}
             >
-              ⚙ {t("settings")}
+              <Icon name="settings" /> {t("settings")}
             </button>
             {settingsOpen && (
-              <div className="absolute bottom-full right-0 z-30 mb-2 w-80 max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-12rem)] overflow-y-auto rounded-xl border border-line bg-surface p-3 shadow-lg">
+              <div className="absolute bottom-full right-0 z-30 mb-2 w-80 max-w-[calc(100cqw-2rem)] max-h-[calc(100dvh-12rem)] overflow-y-auto rounded-xl border border-line bg-surface p-3 shadow-lg">
                 <div className="flex flex-col gap-1.5">
                   <label className="flex cursor-pointer items-center gap-2 text-sm">
                     <input type="checkbox" checked={live} onChange={(e) => setLive(e.target.checked)}

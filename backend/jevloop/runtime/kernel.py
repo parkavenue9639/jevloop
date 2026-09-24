@@ -31,6 +31,7 @@ from jevloop.contracts.policy import (
     AttemptFailure,
     Budget,
     DuplicateNoProgress,
+    EventSinkError,
     GuardrailDenied,
     InvalidProposal,
     MalformedAuthoredValue,
@@ -40,6 +41,7 @@ from jevloop.contracts.policy import (
 from jevloop.contracts.tools import ToolContext, text_field_for, write_actions
 from jevloop.decision.argument_helper import generate_arguments
 from jevloop.decision.drivers import DriverContext
+from jevloop.decision.model import observe_llm_call
 from jevloop.decision.questions import ANSWER_TEXT
 from jevloop.decision.text_helper import generate_text
 from jevloop.runtime.metrics import RunMetrics
@@ -194,6 +196,8 @@ class RuntimeKernel:
                         transcript=self.transcript,
                         provider=self.provider,
                         write_min_confidence=self.policy.min_confidence,
+                        attempt_id=attempt_id,
+                        telemetry=self._emit if self._event_sink is not None else None,
                     ))
                 except AttemptFailure:
                     raise
@@ -245,9 +249,13 @@ class RuntimeKernel:
                     "attempt_id": attempt_id,
                     "operation": decision["operation"],
                     "needs_authoring": needs_authoring,
+                    "binding_mode": decision.get("binding_mode"),
+                    "escalated": bool(proposal.escalation),
                 })
                 stage = "authoring"
-                intent = await self._materialize(decision)
+                intent = await self._materialize(decision, attempt_id=attempt_id)
+            except EventSinkError:
+                raise  # Never continue models/tools or fabricate a persistence observation.
             except AttemptFailure as failure:
                 if decision is None:
                     base = failure.base_decision or {}
@@ -751,13 +759,13 @@ class RuntimeKernel:
 
     # -- materialization and dispatch ---------------------------------------------
 
-    async def _materialize(self, decision):
+    async def _materialize(self, decision, *, attempt_id=None):
         operation = decision["operation"]
         target = decision.get("target")
         spec = self._spec.get(operation)
         if (decision.get("binding_mode") == "llm_parameters"
                 or "arguments" in decision or "bound_arguments" in decision):
-            return await self._materialize_arguments(decision, spec)
+            return await self._materialize_arguments(decision, spec, attempt_id=attempt_id)
         if isinstance(target, (list, tuple)):
             if (
                 not spec
@@ -785,6 +793,7 @@ class RuntimeKernel:
                 self._text_instruction(operation, target, decision.get("phase")),
                 field,
                 operation,
+                attempt_id=attempt_id,
             )
             try:
                 text = _clean(text, field=field, operation=operation)
@@ -808,7 +817,7 @@ class RuntimeKernel:
             "workspace_mutation": bool(spec and spec.mutates_workspace),
         }
 
-    async def _materialize_arguments(self, decision, spec):
+    async def _materialize_arguments(self, decision, spec, *, attempt_id=None):
         operation = decision["operation"]
         helper = None
         supplied = "arguments" in decision
@@ -819,7 +828,12 @@ class RuntimeKernel:
                                  or decision.get("ledger_content") is not None):
             raise InvalidProposal("LLM_PARAMETERS cannot carry partial or bound arguments.")
         if not supplied and force_parameters:
-            args, helper = await self._arguments(self.transcript, self.provider, operation)
+            args, helper = await observe_llm_call(
+                self._emit if self._event_sink is not None else None, {
+                    "attempt_id": attempt_id,
+                    "kind": "authoring" if operation == "ANSWER" else "parameter_authoring",
+                    "operation": operation,
+                }, self._arguments, self.transcript, self.provider, operation)
         elif not supplied and not arguments_complete(spec, args, operation):
             raise InvalidProposal("Direct invocation must have complete arguments; select LLM_PARAMETERS instead.")
         try:
@@ -860,7 +874,7 @@ class RuntimeKernel:
             "workspace_mutation": bool(spec and spec.mutates_workspace),
         }
 
-    async def _invoke_texter(self, instruction, field, operation):
+    async def _invoke_texter(self, instruction, field, operation, *, attempt_id=None):
         """Call the authoring helper with supported typed-envelope metadata."""
         texter = self._text
         try:
@@ -872,7 +886,10 @@ class RuntimeKernel:
             kwargs["field"] = field
         if "operation" in parameters:
             kwargs["operation"] = operation
-        return await texter(self.transcript, instruction, **kwargs)
+        return await observe_llm_call(
+            self._emit if self._event_sink is not None else None, {
+                "attempt_id": attempt_id, "kind": "authoring", "operation": operation,
+            }, texter, self.transcript, instruction, **kwargs)
 
     def _intent_event(self, intent):
         text = intent.get("text")
@@ -894,9 +911,14 @@ class RuntimeKernel:
     async def _emit(self, event):
         if self._event_sink is None:
             return
-        result = self._event_sink(event)
-        if inspect.isawaitable(result):
-            await result
+        try:
+            result = self._event_sink(event)
+            if inspect.isawaitable(result):
+                await result
+        except EventSinkError:
+            raise
+        except Exception as error:
+            raise EventSinkError(str(error)) from error
 
     async def _checkpoint(self):
         if self._checkpoint_hook is None or self.transcript is None:

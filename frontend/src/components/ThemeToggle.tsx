@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useLang } from "../i18n";
+import { Icon } from "./Icon";
 
-/** Ivory/dark toggle. The ivory parchment is the default; the inverted slate
- *  rhythm is opt-in. Stored in localStorage, applied pre-paint by index.html. */
+/** Explicit theme preference, applied pre-paint by index.html. */
 export function ThemeToggle() {
   const { lang } = useLang();
   const [dark, setDark] = useState(
@@ -12,15 +12,16 @@ export function ThemeToggle() {
     const next = !dark;
     setDark(next);
     document.documentElement.dataset.theme = next ? "dark" : "light";
-    localStorage.setItem("jevloop.theme", next ? "dark" : "light");
+    try { localStorage.setItem("jevloop.theme", next ? "dark" : "light"); } catch { /* in-memory preference */ }
   };
   return (
     <button
       onClick={toggle}
-      className="rounded-full border border-line px-2 py-1 text-xs font-semibold text-ink2 transition-colors hover:text-ink"
-      title={lang === "zh" ? (dark ? "切到象牙纸" : "切到石板墨") : dark ? "Ivory" : "Slate"}
+      className="icon-button"
+      aria-label={lang === "zh" ? (dark ? "切换浅色" : "切换深色") : dark ? "Switch to light theme" : "Switch to dark theme"}
+      title={lang === "zh" ? (dark ? "切换浅色" : "切换深色") : dark ? "Light theme" : "Dark theme"}
     >
-      {dark ? "☀" : "◐"}
+      <Icon name={dark ? "sun" : "moon"} />
     </button>
   );
 }

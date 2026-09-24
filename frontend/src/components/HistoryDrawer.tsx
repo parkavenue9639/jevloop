@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useT } from "../i18n";
 import type { RunSummary } from "../types";
 import { RunHistory } from "./RunHistory";
+import { Icon } from "./Icon";
 
 /** Collapsible left rail listing stored sessions; picking one replays the
  *  whole conversation (all its turns). Overlays the chat on small screens,
@@ -34,16 +35,17 @@ export function HistoryDrawer({ open, onClose, runs, currentSessionId, onPickSes
       <div className="fixed inset-0 z-10 bg-black/20 md:hidden" onClick={onClose} />
       <aside
         data-testid="history-drawer"
-        className="fixed inset-y-0 left-0 z-20 flex w-72 flex-col border-r border-line bg-surface p-3 md:static md:z-auto md:w-64 md:shrink-0"
+        className="history-rail fixed inset-y-0 left-0 z-20 flex w-72 flex-col border-r border-line bg-surface p-3 md:static md:z-auto md:w-56 md:shrink-0"
       >
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-sm font-semibold">{t("historySection")}</h2>
           <button
             onClick={onClose}
-            className="rounded-full border border-line px-2 py-0.5 text-xs text-ink2 hover:text-ink"
+            className="icon-button"
             title={t("historyBtn")}
+            aria-label={t("historyBtn")}
           >
-            ✕
+            <Icon name="close" />
           </button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
