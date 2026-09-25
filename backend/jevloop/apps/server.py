@@ -18,6 +18,7 @@ from urllib.parse import parse_qs, urlsplit
 from jevloop.config import DEFAULT_AMBIGUITY_GATE, DEFAULT_ANSWER_PROGRESS_FLOOR, DEFAULT_ESCALATE_THRESHOLD
 from jevloop.contracts.policy import WritePolicy
 from jevloop.decision.drivers import JevDriver, PlainLlmDriver
+from jevloop.decision.laya import normalize_decision_provider
 from jevloop.paths import REPO_ROOT
 from jevloop.runtime.kernel import RuntimeKernel
 from jevloop.runtime.metrics import RunMetrics
@@ -146,6 +147,8 @@ class Dashboard:
                 "ambiguity_gate", DEFAULT_AMBIGUITY_GATE),
             "answer_progress_floor": params.get(
                 "answer_progress_floor", DEFAULT_ANSWER_PROGRESS_FLOOR),
+            "decision_provider": normalize_decision_provider(
+                params.get("decision_provider")),
         }
         state = RunState(run_id, params)
         with self.lock:
@@ -257,6 +260,7 @@ class Dashboard:
                     params.get("ambiguity_gate", DEFAULT_AMBIGUITY_GATE)),
                 answer_progress_floor=_optional_float(
                     params.get("answer_progress_floor", DEFAULT_ANSWER_PROGRESS_FLOOR)),
+                decision_backend=params.get("decision_provider"),
             )
         else:
             driver = PlainLlmDriver()
@@ -386,6 +390,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         parts = self.path.strip("/").split("/")
         url = urlsplit(self.path)
+        if url.path == "/api/config":
+            return self._json({
+                "decision_provider": normalize_decision_provider(None),
+            })
         if url.path == "/api/runs":
             query = parse_qs(url.query, keep_blank_values=True)
             if not query:

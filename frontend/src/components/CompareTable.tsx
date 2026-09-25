@@ -1,4 +1,5 @@
-import type { LanePhase, LaneState, Metrics } from "../types";
+import type { DecisionProvider, LanePhase, LaneState, Metrics } from "../types";
+import { modelName } from "../diagramModel";
 import { useT } from "../i18n";
 
 interface Cell {
@@ -40,7 +41,7 @@ function outcomeText(t: T, phase: LanePhase | undefined, state: LaneState | unde
   }
 }
 
-function rowsFor(t: T, jev: LaneState, baseline: LaneState | undefined, phases: LanePhases): Row[] {
+function rowsFor(t: T, jev: LaneState, baseline: LaneState | undefined, phases: LanePhases, name: string): Row[] {
   const j: MetricsLike = jev.metrics;
   const b: MetricsLike = baseline?.metrics;
   const cell = (text: string, value?: number | null): Cell => ({ text, value });
@@ -50,7 +51,7 @@ function rowsFor(t: T, jev: LaneState, baseline: LaneState | undefined, phases: 
     if (roleTotal <= 0) return "–";
     const jevShare = metrics.jev.est_cost_usd / roleTotal * 100;
     const llmShare = metrics.helper.est_cost_usd / roleTotal * 100;
-    return `Jev ${jevShare.toFixed(1)}% · LLM ${llmShare.toFixed(1)}%`;
+    return `${name} ${jevShare.toFixed(1)}% · LLM ${llmShare.toFixed(1)}%`;
   };
   const llmCalls = (metrics: MetricsLike) => {
     if (!metrics) return "–";
@@ -73,7 +74,7 @@ function rowsFor(t: T, jev: LaneState, baseline: LaneState | undefined, phases: 
     },
     {
       labelKey: "rowModelCalls",
-      jev: cell(j ? `${j.jev.calls} jev + ${llmCalls(j)}` : "–",
+      jev: cell(j ? `${j.jev.calls} ${name.toLowerCase()} + ${llmCalls(j)}` : "–",
                 j ? j.jev.calls + j.helper.calls : null),
       baseline: cell(b ? llmCalls(b) : "–", b?.helper.calls ?? null),
     },
@@ -121,7 +122,7 @@ function rowsFor(t: T, jev: LaneState, baseline: LaneState | undefined, phases: 
     {
       labelKey: "rowCostShare",
       jev: cell(split(j)),
-      baseline: cell(b ? "Jev 0.0% · LLM 100.0%" : "–"),
+      baseline: cell(b ? `${name} 0.0% · LLM 100.0%` : "–"),
     },
     {
       labelKey: "rowCost",
@@ -166,13 +167,15 @@ function diffText(t: T, row: Row): { text: string; winner: "jev" | "baseline" | 
  *  the post-run summary (final metrics are already applied to the lane states).
  *  Without a baseline lane the baseline/Δ columns collapse — the single-lane
  *  degenerate case of the same table. */
-export function CompareTable({ jev, baseline, phases }: {
+export function CompareTable({ jev, baseline, phases, model = "jev" }: {
   jev: LaneState;
   baseline: LaneState | undefined;
   phases: LanePhases;
+  model?: DecisionProvider;
 }) {
   const t = useT();
-  const rows = rowsFor(t, jev, baseline, phases);
+  const name = modelName(model);
+  const rows = rowsFor(t, jev, baseline, phases, name);
   const showBaseline = baseline != null;
   const jt = jev.metrics?.elapsed_ms;
   const bt = baseline?.metrics?.elapsed_ms;
@@ -196,7 +199,7 @@ export function CompareTable({ jev, baseline, phases }: {
               ? "border-good/60 bg-good/10 text-good"
               : "border-critical/50 bg-critical/5 text-critical"
           }`}>
-            JevLoop {headline}
+            {name}Loop {headline}
           </span>
         )}
       </div>
@@ -204,7 +207,7 @@ export function CompareTable({ jev, baseline, phases }: {
         <thead>
           <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-ink2">
             <th className="pb-2 pr-4 font-semibold">{t("colMetric")}</th>
-            <th className="pb-2 pr-4 font-semibold">{t("colJev")}</th>
+            <th className="pb-2 pr-4 font-semibold">{t("colJev", { model: name })}</th>
             {showBaseline && <th className="pb-2 pr-4 font-semibold">{t("colBaseline")}</th>}
             {showBaseline && <th className="pb-2 font-semibold">{t("colDiff")}</th>}
           </tr>
@@ -216,7 +219,7 @@ export function CompareTable({ jev, baseline, phases }: {
             const baseWin = winner === "baseline";
             return (
               <tr key={row.labelKey} className="border-b border-line/60 last:border-0">
-                <td className="py-1.5 pr-4 text-ink2">{t(row.labelKey)}</td>
+                <td className="py-1.5 pr-4 text-ink2">{t(row.labelKey, { model: name })}</td>
                 <td className={`py-1.5 pr-4 font-semibold ${jevWin ? "rounded bg-good/10 text-good" : "text-ink"}`}>
                   {row.jev.text}
                 </td>
@@ -241,6 +244,7 @@ export function CompareTable({ jev, baseline, phases }: {
             i: pricing.llm_input_per_mtok,
             c: pricing.llm_cache_hit_per_mtok,
             o: pricing.llm_output_per_mtok,
+            model: name,
           })}
         </p>
       )}
@@ -250,6 +254,7 @@ export function CompareTable({ jev, baseline, phases }: {
             policy: cachePolicy.policy,
             jev: cachePolicy.scope_hash?.slice(0, 8) ?? "shared",
             baseline: baselineCache?.scope_hash?.slice(0, 8) ?? "shared",
+            model: name,
           })}
         </p>
       )}

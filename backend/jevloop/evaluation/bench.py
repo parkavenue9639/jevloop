@@ -31,6 +31,7 @@ from jevloop.apps.server import CACHE_POLICY_ISOLATED, _cache_scope
 from jevloop.config import DEFAULT_AMBIGUITY_GATE, DEFAULT_ANSWER_PROGRESS_FLOOR, DEFAULT_ESCALATE_THRESHOLD
 from jevloop.contracts.policy import WritePolicy
 from jevloop.decision.drivers import JevDriver, PlainLlmDriver
+from jevloop.decision.laya import reported_model
 from jevloop.paths import BACKEND_ROOT
 from jevloop.runtime.kernel import RuntimeKernel
 from jevloop.runtime.metrics import RunMetrics
@@ -595,7 +596,7 @@ async def run_suite(scenarios: list[Scenario], ctx: BenchContext, *,
             "turns": sum(len(scenario.turns) for scenario in scenarios),
             "started_at": datetime.now().astimezone().isoformat(timespec="seconds"),
             "models": {
-                "jev": os.environ.get("TYPESAFE_MODEL", "jev-latest"),
+                "jev": reported_model(),
                 "llm": os.environ.get("TEXT_MODEL", "deepseek-chat"),
             },
             "escalate_threshold": ctx.escalate_threshold,

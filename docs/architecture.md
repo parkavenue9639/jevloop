@@ -171,6 +171,7 @@ Principal entry points:
 | Shared loop | [runtime/kernel.py](../backend/jevloop/runtime/kernel.py) |
 | Decision strategies | [decision/drivers.py](../backend/jevloop/decision/drivers.py) |
 | Jev question compilation and validation | [decision/model.py](../backend/jevloop/decision/model.py) |
+| Local Laya (MLX or CUDA) on the same request | [decision/laya.py](../backend/jevloop/decision/laya.py), [apps/laya_server.py](../backend/jevloop/apps/laya_server.py) |
 | Durable source and both projections | [context/](../backend/jevloop/context/) |
 | Tool/argument/policy contracts | [contracts/](../backend/jevloop/contracts/) |
 | Concrete providers | [tools/](../backend/jevloop/tools/) |

@@ -5,7 +5,6 @@ import inspect
 import json
 import logging
 import math
-import os
 import time
 from copy import deepcopy
 from dataclasses import dataclass
@@ -14,6 +13,7 @@ import httpx
 
 from jevloop.contracts.arguments import LLM_PARAMETERS, bound_arguments, validate_arguments
 from jevloop.contracts.policy import EventSinkError, InvalidProposal, MalformedAuthoredValue
+from jevloop.decision.laya import JEV_ENDPOINT, client_target, request_model
 from jevloop.decision.questions import (
     ACTION_PREAMBLE,
     CORE_ACTIONS,
@@ -27,7 +27,7 @@ from jevloop.decision.questions import (
 )
 
 CLIENT: httpx.AsyncClient | None = None
-ENDPOINT = "https://api.typesafe.ai/v1/systemone"
+ENDPOINT = JEV_ENDPOINT
 MAX_QUESTION_HEADS = 128
 MAX_QUESTIONS_CHARS = 65536
 MAX_REQUEST_BYTES = 262144
@@ -44,17 +44,19 @@ class InvalidModelResponse(ValueError):
 
 
 def client() -> httpx.AsyncClient:
-    # lazily created on the single server loop so connections are reused across calls
+    # lazily created on the single server loop so connections are reused across calls.
+    # 120s covers a local Laya forward on CPU; hosted Jev normally returns much sooner.
     global CLIENT
     if CLIENT is None:
-        CLIENT = httpx.AsyncClient(http2=True, timeout=25)
+        CLIENT = httpx.AsyncClient(http2=True, timeout=120)
     return CLIENT
 
 
 async def post_json(url, key, body):
+    headers = {"Authorization": f"Bearer {key}"} if key else {}
     for attempt in range(3):
         try:
-            response = await client().post(url, json=body, headers={"Authorization": f"Bearer {key}"})
+            response = await client().post(url, json=body, headers=headers)
         except httpx.HTTPError:
             raise ModelUnavailable("Model connection failed; no action executed.") from None
         if response.status_code in {429, 529, 503} and attempt < 2:
@@ -463,7 +465,8 @@ async def observe_llm_call(observer, metadata, call, *args, **kwargs):
     return result
 
 
-async def choose(workspace, _goal, _history, provider=None, *, on_request=None):
+async def choose(workspace, _goal, _history, provider=None, *, on_request=None,
+                 decision_backend=None):
     """Ask Jev once, then validate only the selected conditional path."""
     questions, compiled = compile_questions(workspace, provider)
     state = workspace.state()
@@ -477,16 +480,16 @@ async def choose(workspace, _goal, _history, provider=None, *, on_request=None):
             for (phase, operation), criteria in compiled.target_candidates.items()
         },
     }
-    body = {
-        "model": os.environ.get("TYPESAFE_MODEL", "jev-latest"),
-        "state": state,
-        "questions": questions,
-    }
+    model_id = request_model(decision_backend)
+    body = {"state": state, "questions": questions}
+    if model_id:
+        body["model"] = model_id
     if len(json.dumps(body, ensure_ascii=False).encode()) > MAX_REQUEST_BYTES:
         raise InvalidModelResponse("Jev state and questions exceed the invocation budget.")
     await observe(on_request, questions)
+    target = client_target(decision_backend)
     started = time.perf_counter()
-    result = await post_json(ENDPOINT, os.environ["TYPESAFE_API_KEY"], body)
+    result = await post_json(target["url"], target["key"], body)
     answers = result.get("answers")
     if not isinstance(answers, dict):
         raise _billed_invalid(

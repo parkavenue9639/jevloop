@@ -8,9 +8,29 @@ import uuid
 from datetime import datetime
 
 from jevloop.config import DEFAULT_AMBIGUITY_GATE, DEFAULT_ANSWER_PROGRESS_FLOOR, DEFAULT_ESCALATE_THRESHOLD
+from jevloop.decision.laya import (
+    DEFAULT_HEAD_MAX_LEN,
+    DEFAULT_MAX_LEN,
+    required_credentials,
+)
 from jevloop.paths import BACKEND_ROOT
 
-ENV_KEYS = ("TYPESAFE_API_KEY", "DEEPSEEK_API_KEY")
+ENV_KEYS = (
+    "TYPESAFE_API_KEY",
+    "DEEPSEEK_API_KEY",
+    "DECISION_PROVIDER",
+    "LAYA_BASE_URL",
+    "LAYA_API_KEY",
+    "LAYA_MODEL",
+    "LAYA_RUNTIME",
+    "LAYA_DEVICE",
+    "LAYA_PRELOAD",
+    "LAYA_MODELS",
+    "LAYA_MAX_LEN",
+    "LAYA_HEAD_MAX_LEN",
+    "LAYA_AUTO_TASK",
+    "LAYA_DTYPE",
+)
 
 
 def load_env_file():
@@ -66,6 +86,7 @@ def build_parser():
                      default=DEFAULT_ANSWER_PROGRESS_FLOOR,
                      help="optional first-ANSWER progress floor (default: disabled)")
     sub.add_parser("smoke", help="run the offline kernel + Docker end-to-end smoke")
+    sub.add_parser("laya-smoke", help="one live decision against the local Laya server")
 
     bench = sub.add_parser(
         "bench", help="paired multi-turn benchmark over the fixed scenario suite")
@@ -105,14 +126,36 @@ def build_parser():
     serve = sub.add_parser("serve", help="start the dashboard server")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8790)
+
+    laya = sub.add_parser(
+        "laya-serve",
+        help="serve local Laya on /v1/systemone (MLX on Apple Silicon, CUDA on NVIDIA)",
+    )
+    laya.add_argument("--host", default=os.environ.get("LAYA_HOST", "127.0.0.1"))
+    laya.add_argument("--port", type=int, default=int(os.environ.get("LAYA_PORT", "8000")))
+    laya.add_argument("--runtime", default=os.environ.get("LAYA_RUNTIME", "auto"),
+                      choices=("auto", "mlx", "cuda"))
+    laya.add_argument("--device", default=os.environ.get("LAYA_DEVICE") or None,
+                      help="mlx: gpu or cpu; cuda: cuda or cpu")
+    laya.add_argument("--models", default=os.environ.get("LAYA_MODELS"),
+                      help="comma-separated checkpoints to preload (default: english,multilingual)")
+    laya.add_argument("--max-len", type=int, default=int(os.environ.get("LAYA_MAX_LEN", DEFAULT_MAX_LEN)))
+    laya.add_argument("--head-max-len", type=int,
+                      default=int(os.environ.get("LAYA_HEAD_MAX_LEN", DEFAULT_HEAD_MAX_LEN)))
+    laya.add_argument("--no-preload", action="store_true",
+                      help="load a checkpoint on the first request instead of at startup")
     return parser
 
 
-def cmd_run(args):
+def _require_credentials():
     load_env_file()
-    for required in ENV_KEYS:
-        if not os.environ.get(required):
-            sys.exit(f"Missing {required} in environment; no action executed.")
+    missing = [key for key in required_credentials() if not os.environ.get(key)]
+    if missing:
+        sys.exit("Missing " + ", ".join(missing) + " in environment; no action executed.")
+
+
+def cmd_run(args):
+    _require_credentials()
 
     import asyncio
 
@@ -193,6 +236,13 @@ def cmd_smoke():
     print(json.dumps(run_smoke(), ensure_ascii=False, default=str))
 
 
+def cmd_laya_smoke():
+    load_env_file()
+    from jevloop.evaluation.laya_smoke import main as run_smoke
+
+    print(json.dumps(run_smoke(), ensure_ascii=False, default=str))
+
+
 def cmd_bench(args):
     import asyncio
     from pathlib import Path
@@ -217,9 +267,9 @@ def cmd_bench(args):
                   f"turns={len(scenario.turns)} max_steps={scenario.max_steps}")
         return
 
-    for required in ("TYPESAFE_API_KEY", "DEEPSEEK_API_KEY"):
-        if not os.environ.get(required):
-            sys.exit(f"Missing {required} in environment; no action executed.")
+    missing = [key for key in required_credentials() if not os.environ.get(key)]
+    if missing:
+        sys.exit("Missing " + ", ".join(missing) + " in environment; no action executed.")
     stamp = datetime.now().astimezone().strftime("%Y%m%d-%H%M%S")
     out_dir = Path(args.artifacts) if args.artifacts else (
         bench.DEFAULT_SCENARIOS.parent.parent / "artifacts" / "bench" / stamp)
@@ -289,15 +339,42 @@ def cmd_serve(args):
     serve(host=args.host, port=args.port)
 
 
+def cmd_laya_serve(args):
+    load_env_file()
+    from jevloop.apps.laya_server import serve
+    from jevloop.decision.laya import LayaRuntimeError
+
+    preload_env = os.environ.get("LAYA_PRELOAD", "1").strip().lower()
+    preload = preload_env not in {"0", "false", "no", "off"} and not args.no_preload
+    try:
+        serve(
+            args.host,
+            args.port,
+            runtime=args.runtime,
+            device=args.device,
+            models=args.models,
+            preload=preload,
+            max_len=args.max_len,
+            head_max_len=args.head_max_len,
+        )
+    except LayaRuntimeError as error:
+        sys.exit(str(error))
+
+
 def main(argv=None):
+    load_env_file()
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.command == "run":
         cmd_run(args)
     elif args.command == "serve":
         cmd_serve(args)
+    elif args.command == "laya-serve":
+        cmd_laya_serve(args)
     elif args.command == "smoke":
         cmd_smoke()
+    elif args.command == "laya-smoke":
+        cmd_laya_smoke()
     elif args.command == "bench":
         cmd_bench(args)
 

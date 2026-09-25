@@ -24,10 +24,11 @@ function confidenceTone(value: number): "good" | "accent" | "warn" {
  *  probability distributions, escalation's original distribution, denial detail
  *  and the raw request live behind it. Native <details> so it works with zero
  *  state (and in server rendering). */
-export function ActivityRow({ index, step, lane, compact = false }: {
+export function ActivityRow({ index, step, lane, compact = false, modelLabel = "Jev" }: {
   index: number;
   step: Step;
   lane?: Lane;
+  modelLabel?: string;
   compact?: boolean;
 }) {
   const t = useT();
@@ -83,8 +84,8 @@ export function ActivityRow({ index, step, lane, compact = false }: {
       )}
       <span className="ml-auto flex items-center gap-2 text-ink2">
         {d.latency_ms != null && (
-          <span className="num" title={t("jevDecisionTime")}>
-            {lane === "jev" ? "Jev" : "LLM"} {fmtMs(d.latency_ms)}
+          <span className="num" title={t("jevDecisionTime", { model: modelLabel })}>
+            {lane === "jev" ? modelLabel : "LLM"} {fmtMs(d.latency_ms)}
           </span>
         )}
         {step.outcome?.helper?.latency_ms != null && (
@@ -121,6 +122,7 @@ export function ActivityRow({ index, step, lane, compact = false }: {
               {t("jevTokenDetail", {
                 input: fmtTokens(d.usage.input_tokens),
                 output: fmtTokens(d.usage.output_tokens),
+                model: modelLabel,
               })}
             </span>
           )}
@@ -191,7 +193,7 @@ export function ActivityRow({ index, step, lane, compact = false }: {
             >
               <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 px-3 py-2 text-xs">
                 <Badge tone={call.kind === "jev_decision" ? "accent" : "neutral"}>
-                  {t(`modelCallKind_${call.kind}`)}
+                  {t(`modelCallKind_${call.kind}`, { model: modelLabel })}
                 </Badge>
                 <span className="font-semibold text-ink">{call.model}</span>
                 {call.latency_ms != null && (
@@ -223,7 +225,7 @@ export function ActivityRow({ index, step, lane, compact = false }: {
       )}
       {step.request && modelCalls.length === 0 ? (
         <details>
-          <summary className="cursor-pointer text-xs text-ink2 select-none">{t("rawReq")}</summary>
+          <summary className="cursor-pointer text-xs text-ink2 select-none">{t("rawReq", { model: modelLabel })}</summary>
           <pre className="mt-2 max-h-72 overflow-auto rounded-xl bg-surface2 p-3 text-[11px] leading-relaxed text-ink2">
             {JSON.stringify(step.request, null, 2)}
           </pre>
@@ -261,7 +263,7 @@ export function ActivityRow({ index, step, lane, compact = false }: {
           }`}
         >
           <span className="font-semibold">⚖ {t("llmReviewed")}</span>
-          <span> — {t("reviewReason")} </span>
+          <span> — {t("reviewReason", { model: modelLabel })} </span>
           <code className="rounded bg-surface2 px-1 py-px">{esc.from.action}</code>
           {esc.from.confidence != null && ` ${(esc.from.confidence * 100).toFixed(0)}%`}
           <span> {t("reviewResult")} </span>

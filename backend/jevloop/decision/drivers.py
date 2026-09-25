@@ -123,12 +123,13 @@ class JevDriver:
     def __init__(self, *, escalate_threshold=DEFAULT_ESCALATE_THRESHOLD,
                  ambiguity_gate=DEFAULT_AMBIGUITY_GATE,
                  answer_progress_floor=DEFAULT_ANSWER_PROGRESS_FLOOR,
-                 chooser=None, adjudicator=None):
+                 chooser=None, adjudicator=None, decision_backend=None):
         self.escalate_threshold = escalate_threshold
         # None disables each guard: ambiguity_gate keeps confidence-only
         # escalation; answer_progress_floor keeps premature ANSWER unguarded.
         self.ambiguity_gate = ambiguity_gate
         self.answer_progress_floor = answer_progress_floor
+        self.decision_backend = decision_backend
         self._choose = chooser or choose
         self._uses_default_chooser = chooser is None
         self._adjudicate = adjudicator or arbitrate
@@ -136,6 +137,8 @@ class JevDriver:
     async def decide(self, context: DriverContext) -> DriverProposal:
         workspace, provider = context.workspace, context.provider
         chooser_options = {}
+        if self._uses_default_chooser and self.decision_backend:
+            chooser_options["decision_backend"] = self.decision_backend
         if self._uses_default_chooser and context.telemetry is not None:
             async def request_ready(questions):
                 await observe(context.telemetry, {

@@ -124,6 +124,7 @@ export interface Metrics {
 
 export type Lane = "jev" | "baseline";
 export type RunProfile = "single_live" | "single_shadow" | "paired_shadow";
+export type DecisionProvider = "jev" | "laya";
 
 
 /** Coarse per-lane status derived from the stream (not sent by the server). */
@@ -222,4 +223,5 @@ export interface RunParams {
   sandbox_network: boolean;
   min_confidence: number;
   allow_recipients: string[];
+  decision_provider: DecisionProvider;
 }

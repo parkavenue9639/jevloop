@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { candidateView } from "../src/candidateView.ts";
+import { candidateView, liveDecision } from "../src/candidateView.ts";
 
 const original = {
   operation: "READ_FILE", phase: "INSPECT", binding_mode: "llm_parameters", target: null,
@@ -67,4 +67,17 @@ test("multiple target membership heads preserve each include or skip decision", 
   ] };
   const view = candidateView({ decision: {}, model_calls: [{ kind: "jev_decision", response }] });
   assert.deepEqual(view.cards.map((card) => card.selected), ["include", "skip"]);
+});
+
+test("live-decision milestones name the chosen decision model", () => {
+  const frame = {
+    attemptId: "a1", step: 1,
+    questions: request.questions,
+    response: original,
+  };
+  const jevLines = liveDecision(frame, false, "jev");
+  assert.ok(jevLines.some((line) => line.includes("to Jev")));
+  const layaLines = liveDecision(frame, false, "laya");
+  assert.ok(layaLines.some((line) => line.includes("to Laya")));
+  assert.ok(layaLines.some((line) => line.startsWith("Laya returned")));
 });

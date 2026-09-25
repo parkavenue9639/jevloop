@@ -220,6 +220,19 @@ cp env.example .env
 # 设置 TYPESAFE_API_KEY 和 DEEPSEEK_API_KEY。
 ```
 
+改用本地 Laya 做决策时，在本项目的 uv 环境里安装对应 extra，再启动服务。
+Apple Silicon 走 MLX，NVIDIA 走 CUDA。设置 `DECISION_PROVIDER=laya` 后，
+决策请求会发到这个本地服务。控制台输入框旁也可以直接选 Jev 或 Laya。文本模型不变。
+
+```bash
+cd backend
+uv sync --extra laya-mlx    # Apple Silicon
+uv sync --extra laya-cuda   # NVIDIA
+```
+
+`make dev` 会在 `127.0.0.1:8791` 启动这个服务，并让控制台 API 使用它。
+`make stop` 会把它和 API、Vite 一起停掉。
+
 可选的飞书/Lark 工具使用当前 `lark-cli` 用户身份：
 
 ```bash

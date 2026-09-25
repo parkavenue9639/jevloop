@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useT } from "../i18n";
+import { diagramModel } from "../diagramModel";
+import { useDecisionChoice } from "../decisionChoice";
 import { laneErrorMessage, lanePhase } from "../lane";
 import type { StreamData } from "../stream";
 import type { ChatApi } from "../chat";
@@ -10,12 +12,14 @@ import { PairedTurn, UserBubble } from "./PairedTurn";
  *  with both lanes under the user's goal; a single-lane run stays an
  *  ordinary chat card with just the Jev lane panel. */
 function Turn({ runId, chat }: { runId: string; chat: ChatApi }) {
+  const selectedProvider = useDecisionChoice().provider;
   const data: StreamData = chat.streamOf(runId);
   if (data.lanes.baseline != null) return <PairedTurn runId={runId} chat={chat} />;
   const goal = data.params ? String(data.params.goal ?? "") : "";
   const state = data.lanes.jev;
   const phase = lanePhase("jev", state, data.errors, data.done);
   const isActive = runId === chat.activeRunId && chat.canControl;
+  const model = diagramModel(data.params, selectedProvider);
   return (
     <div className="flex flex-col gap-3">
       {goal && <UserBubble goal={goal} />}
@@ -27,6 +31,7 @@ function Turn({ runId, chat }: { runId: string; chat: ChatApi }) {
         historical={!isActive}
         onContinue={isActive ? chat.continueRun : undefined}
         onAbort={isActive ? chat.abortRun : undefined}
+        model={model}
       />
     </div>
   );
@@ -38,6 +43,7 @@ function Turn({ runId, chat }: { runId: string; chat: ChatApi }) {
  *  contains paired turns so the two lanes have room to sit side by side. */
 export function MessageList({ chat }: { chat: ChatApi }) {
   const t = useT();
+  const selectedProvider = useDecisionChoice().provider;
   const ref = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
@@ -80,7 +86,7 @@ export function MessageList({ chat }: { chat: ChatApi }) {
         {chat.pendingGoal && (
           <div className="flex flex-col gap-3">
             <UserBubble goal={chat.pendingGoal} />
-            <ActivityGroup lane="jev" state={undefined} phase="running" />
+            <ActivityGroup lane="jev" state={undefined} phase="running" model={selectedProvider} />
           </div>
         )}
 

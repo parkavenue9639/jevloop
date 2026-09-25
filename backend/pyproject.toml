@@ -18,6 +18,17 @@ dependencies = [
     "jsonschema>=4.23",
 ]
 
+[project.optional-dependencies]
+# Installed only with `uv sync --extra ...` inside this project. Not global.
+laya-mlx = [
+    "laya-mlx>=0.2.0; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "fastapi>=0.115",
+    "uvicorn>=0.32",
+]
+laya-cuda = [
+    "laya[serve]>=0.3.20",
+]
+
 [project.scripts]
 jevloop = "jevloop.cli:main"
 
