@@ -54,6 +54,7 @@ class ToolContext:
     intent_id: str | None = None
     idempotency_key: str | None = None
     arguments: dict | None = None  # complete, validated, frozen canonical arguments
+    visual_read: object = None  # async(part) -> observation; injected, no decision authority
 
 
 def text_field_for(operation: str) -> str:

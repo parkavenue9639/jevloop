@@ -33,6 +33,32 @@ packages and test public services. `jevloop smoke` remains offline;
 `jevloop run --offline-sandbox ...` disables egress explicitly. Containers never
 receive host environment variables, credentials, home directories, or sockets.
 
+## Image inputs
+
+Configure `VISION_MODEL`, `VISION_MODEL_BASE_URL` and `VISION_MODEL_API_KEY` in
+`backend/.env` (or the root `.env`) for a vision-capable Chat Completions model.
+The dashboard accepts image attachments, and CLI supports repeated paths:
+
+```bash
+uv run jevloop run "Describe this interface" --image ./screen.png
+```
+
+`VIEW_IMAGE(source, detail)` reads sandbox files or already observed asset
+references, then invokes contextual visual perception. User uploads and tool captures become
+immutable assets referenced by the same transcript; only the LLM transport
+materializes image bytes. Both comparison lanes receive the same initial images.
+History/replay needs the retained asset directory as well as session/run records.
+
+Jev continues to select operations for image-bearing sessions. Ordinary LLM
+requests see attachment metadata and prior visual observations, not unselected
+pixels. Only executing `VIEW_IMAGE` requires visual capability; uploads alone do
+not. The tool restores task context and returns an observation to the normal loop.
+No permanent "understood" flag prevents re-reading for a new question.
+Static PNG/JPEG/WebP/GIF only, 10 MiB per image, 8 images per upload/request batch.
+Vision prices are optional but must be configured explicitly for cost comparison;
+unknown prices are displayed as unknown, not free. See
+[multimodal contract](../docs/contracts/multimodal-evidence.md) for all limits.
+
 ## Paired benchmark
 
 ```bash

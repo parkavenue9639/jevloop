@@ -2,6 +2,7 @@ import type { DecisionProvider, LanePhase, LaneState, Metrics, ModelCall } from 
 import type { StreamData } from "./stream";
 import { lanePhase } from "./lane.ts";
 import { diagramModel } from "./diagramModel.ts";
+import { costComplete } from "./cost.ts";
 
 export interface SessionComparison {
   turns: number;
@@ -50,6 +51,7 @@ export function aggregateMetrics(
   const directJevSteps = sum(routing.map((item) => item.direct_jev_steps));
   return {
     elapsed_ms: sum(metrics.map((item) => item.elapsed_ms)),
+    cost_complete: metrics.every(costComplete),
     jev: {
       calls: sum(metrics.map((item) => item.jev.calls)),
       median_ms: median(jevLatencies)
@@ -62,6 +64,8 @@ export function aggregateMetrics(
     },
     helper: {
       calls: sum(metrics.map((item) => item.helper.calls)),
+      cost_complete: metrics.every((item) => item.helper.cost_complete !== false),
+      unpriced_calls: sum(metrics.map((item) => item.helper.unpriced_calls ?? 0)),
       median_ms: median(helperLatencies)
         ?? median(metrics.flatMap((item) => item.helper.median_ms == null ? [] : [item.helper.median_ms])),
       total_ms: sum(metrics.map((item) => item.helper.total_ms)),
@@ -81,6 +85,7 @@ export function aggregateMetrics(
       llm_assisted_jev_steps: sum(routing.map((item) => item.llm_assisted_jev_steps)),
       llm_avoidance_rate: jevSteps ? directJevSteps / jevSteps : null,
       plain_steps: sum(routing.map((item) => item.plain_steps)),
+      visual_steps: sum(routing.map((item) => item.visual_steps ?? 0)),
     } : undefined,
     est_cost_usd: Number(sum(metrics.map((item) => item.est_cost_usd)).toFixed(6)),
     pricing: metrics.find((item) => item.pricing)?.pricing,

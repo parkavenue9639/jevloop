@@ -220,6 +220,13 @@ cp env.example .env
 # 设置 TYPESAFE_API_KEY 和 DEEPSEEK_API_KEY。
 ```
 
+如需通过 `VIEW_IMAGE` 理解上传或沙箱中的图片，还需配置 `VISION_MODEL`、
+`VISION_MODEL_BASE_URL` 和 `VISION_MODEL_API_KEY`，使用支持图片输入的
+Chat Completions 模型。图片作为不可变证据由同一份 transcript 引用，支持历史展示与回放。
+Jev 仍根据任务与上下文决定是否读图，包括任务所需的背景图；工具返回视觉观察后，
+继续进入原有 Jev 决策循环，不因存在图片而切换整个会话的决策器。
+详见[图片配置与限制](backend/README.md#image-inputs)。
+
 改用本地 Laya 做决策时，在本项目的 uv 环境里安装对应 extra，再启动服务。
 Apple Silicon 走 MLX，NVIDIA 走 CUDA。设置 `DECISION_PROVIDER=laya` 后，
 决策请求会发到这个本地服务。控制台输入框旁也可以直接选 Jev 或 Laya。文本模型不变。

@@ -22,7 +22,7 @@ const Node = memo(function Node({ at, title, hint, tone, active = false, observe
   at: Point; title: string; hint: string; tone: string; active?: boolean; observed?: boolean; width?: number;
 }) {
   return <g transform={`translate(${at.x} ${at.y})`} className={`flow-svg-node tone-${tone} ${active ? "is-active" : ""} ${observed ? "is-observed" : ""}`}>
-    <title>{title} · {hint}</title>
+    <title>{`${title} · ${hint}`}</title>
     <g className="flow-node-visual">
       <rect className="flow-halo" x={-width / 2 - 3} y={-NODE_HALF_HEIGHT - 3} width={width + 6} height={NODE_HALF_HEIGHT * 2 + 6} rx="13" />
       <rect className="flow-node-body" x={-width / 2} y={-NODE_HALF_HEIGHT} width={width} height={NODE_HALF_HEIGHT * 2} rx="9" />
@@ -128,10 +128,12 @@ function DecisionFlowView({ view, frame, step, sceneKey = "default", initialView
   const llmActive = moving && view.active === "authoring";
   const kernelActive = moving && view.active === "kernel";
   const { assisted, direct } = frame ? observedRoute(frame) : view;
+  const visualRead = frame ? !!frame.visualRead : view.visualRead;
+  const toolRoute = direct || (visualRead && !assisted);
   const returned = !!frame?.response || !!choices.originalOperation;
   const committed = frame ? !!frame.committed : !!step?.intent_id && step.decision.operation !== "BLOCKED";
   const recorded = !frame && !!step?.outcome && !["RUN_LIMIT", "RESTORE"].includes(step?.decision.operation ?? "");
-  const llmCall = frame ? undefined : step?.model_calls?.find((call) => call.kind !== "jev_decision");
+  const llmCall = frame ? undefined : step?.model_calls?.find((call) => call.kind !== "jev_decision" && call.kind !== "visual_read");
   const llmKind = frame?.llm?.kind ?? llmCall?.kind;
   const llmLabel = llmKind === "arbitration" ? (lang === "zh" ? "LLM 复核 / 兜底" : "LLM review / fallback") : (lang === "zh" ? "LLM 补参 / 生成" : "LLM authoring");
   const changed = choices.originalOperation !== choices.finalOperation && choices.finalOperation != null;
@@ -232,8 +234,14 @@ function DecisionFlowView({ view, frame, step, sceneKey = "default", initialView
     <div className={`flow-handoff ${llmActive ? "is-active" : ""}`} aria-live="polite">
       <span>{name}</span><strong>{choices.originalOperation ?? (lang === "zh" ? "等待选择" : "Awaiting choice")}</strong>
       {assisted ? <><b aria-hidden="true">→</b><span className="handoff-llm">{llmLabel}</span><small>{frame?.llm?.status === "running" ? (lang === "zh" ? "正在调用" : "IN FLIGHT") : frame?.llm?.status === "returned" ? (lang === "zh" ? "已返回，待校验" : "RETURNED / VALIDATE") : frame?.llm?.status === "failed" ? (lang === "zh" ? "调用失败" : "CALL FAILED") : frame ? (lang === "zh" ? "等待调用" : "AWAITING CALL") : (lang === "zh" ? "历史记录" : "RECORDED")}</small></>
-        : direct ? <><b aria-hidden="true">→</b><span>{lang === "zh" ? "直通执行" : "DIRECT EXECUTION"}</span></> : null}
+        : visualRead ? <><b aria-hidden="true">→</b><span>{lang === "zh" ? "工具内读图" : "IMAGE READING INSIDE TOOL"}</span></>
+          : direct ? <><b aria-hidden="true">→</b><span>{lang === "zh" ? "直通执行" : "DIRECT EXECUTION"}</span></> : null}
     </div>
+    {visualRead && <div className="topology-note" data-testid="visual-read" aria-live="polite">VIEW_IMAGE · {frame?.visualRead?.status === "running"
+      ? (lang === "zh" ? "正在执行：结合任务上下文读取图片" : "Executing: reading image with task context")
+      : frame?.visualRead?.status === "failed" ? (lang === "zh" ? "读图调用失败" : "Image read failed")
+        : frame ? (lang === "zh" ? "视觉观察已返回，等待工具结果记录" : "Visual observation returned; awaiting recorded tool result")
+          : (lang === "zh" ? "工具执行期间调用视觉模型" : "Vision model called during tool execution")}</div>}
     <div className="flow-canvas-hint">{overview ? (lang === "zh" ? "概览模式 · 可返回可读字号查看细节" : "Overview · return to readable size for details") : (lang === "zh" ? "可读字号 · 横向滚动查看完整流程 · 点击候选查看参数" : "Readable size · scroll horizontally for the full loop · select a candidate for arguments")}</div>
     <div ref={viewport} className="flow-svg-viewport" tabIndex={0} aria-label={lang === "zh" ? "横向流程画布，可滚动" : "Horizontal flow canvas, scrollable"}>
       <svg viewBox={`0 0 ${graph.width} ${graphHeight}`} style={{ minWidth: overview ? 0 : graph.width * .9, maxWidth: graph.width, height: "auto", maxHeight: "none", aspectRatio: `${graph.width} / ${graphHeight}` }} className="decision-circuit" role="group" aria-labelledby={`${id}-title ${id}-desc`}>
@@ -253,10 +261,10 @@ function DecisionFlowView({ view, frame, step, sceneKey = "default", initialView
         {graph.groups.map((group) => <Fan key={group.question.key} {...group} pending={pending} original={original} focusLevel={focusLevel} returned={returned}
           onOption={showDetail} />)}
         {!questions.length && <text x={graph.poolLeft + 100} y="290" className="flow-annotation">{emptyLabel}</text>}
-        <Wire d={horizontalCurve({ x: e.x + NODE_WIDTH / 2, y: e.y }, c)} tone="jev" selected={direct} moving={kernelActive && direct} />
+        <Wire d={horizontalCurve({ x: e.x + NODE_WIDTH / 2, y: e.y }, c)} tone="jev" selected={toolRoute} moving={kernelActive && toolRoute} />
         <Wire d={`M${e.x} ${e.y + NODE_HALF_HEIGHT} V${l.y - NODE_HALF_HEIGHT}`} tone="llm" selected={!!assisted} moving={llmActive} />
         <Wire d={`M${l.x + NODE_WIDTH / 2} ${l.y} H${c.x} V${c.y}`} tone="llm" selected={!!assisted} moving={kernelActive && !!assisted} />
-        <text x={c.x - 24} y={c.y - 15} textAnchor="end" className={`flow-annotation ${direct ? "accent-jev" : ""}`}>{lang === "zh" ? "直通" : "DIRECT"}</text>
+        <text x={c.x - 24} y={c.y - 15} textAnchor="end" className={`flow-annotation ${direct ? "accent-jev" : ""}`}>{visualRead ? (lang === "zh" ? "执行工具" : "EXECUTE TOOL") : (lang === "zh" ? "直通" : "DIRECT")}</text>
         <text x={l.x - 14} y={l.y - 64} textAnchor="end" className="flow-route-label">{llmKind === "arbitration" ? (lang === "zh" ? "交接 → 复核" : "HANDOFF → REVIEW") : (lang === "zh" ? "交接 → 补参" : "HANDOFF → PARAMETERS")}</text>
         <Wire d={horizontalCurve(c, { x: k.x - NODE_WIDTH / 2, y: k.y })} tone="tool" selected={!!choices.finalOperation} moving={kernelActive} />
         <Wire d={`M${k.x} ${k.y + NODE_HALF_HEIGHT} V${r.y - 22}`} tone="evidence" selected={recorded} />
@@ -293,4 +301,5 @@ export const DecisionFlow = memo(DecisionFlowView, (a, b) =>
   && a.view.status === b.view.status && a.view.active === b.view.active
   && a.view.blocked === b.view.blocked && a.view.direct === b.view.direct
   && a.view.assisted === b.view.assisted && a.view.step === b.view.step
+  && a.view.visualRead === b.view.visualRead
   && a.view.route.join() === b.view.route.join());

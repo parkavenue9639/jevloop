@@ -59,6 +59,11 @@ export function applyRunEvent(data: StreamData, payload: RunEvent): StreamData {
     case "llm_completed":
       return patch(data, payload.lane ?? "jev", (l) => {
         if (l.finished || l.decisionFrame?.attemptId !== payload.attempt_id) return l;
+        if (payload.kind === "visual_read") {
+          const status = payload.type === "llm_started" ? "running" : payload.status;
+          return { ...l, activity: status === "failed" ? null : { stage: "executing", operation: payload.operation },
+            decisionFrame: { ...l.decisionFrame, visualRead: { operation: payload.operation, intentId: payload.intent_id, reason: payload.reason, status } } };
+        }
         return { ...l, activity: payload.type === "llm_started" ? { stage: "authoring", operation: payload.operation } : null,
           decisionFrame: { ...l.decisionFrame, llm: { kind: payload.kind, operation: payload.operation, reason: payload.reason,
             status: payload.type === "llm_started" ? "running" : payload.status } } };

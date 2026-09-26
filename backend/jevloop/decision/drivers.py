@@ -17,6 +17,7 @@ from jevloop.contracts.authored import _clean
 from jevloop.contracts.policy import InvalidProposal, MalformedAuthoredValue
 from jevloop.contracts.schemas import llm_tool_schemas
 from jevloop.decision.escalation import arbitrate, latest_recoverable, should_escalate
+from jevloop.decision.llm_transport import prepare_request
 from jevloop.decision.model import (
     action_catalog,
     choose,
@@ -222,7 +223,8 @@ class JevDriver:
             note = verdict.get("note")
             helper = {
                 "kind": "arbitration",
-                "model": os.environ.get("TEXT_MODEL", "deepseek-chat"),
+                "model": (verdict.get("request") or {}).get("model", os.environ.get("TEXT_MODEL", "deepseek-chat")),
+                "visual": verdict.get("visual", False),
                 "latency_ms": verdict.get("latency_ms"),
                 "usage": verdict.get("usage", {}),
                 "request": verdict.get("request"),
@@ -365,10 +367,8 @@ class PlainLlmDriver:
                 "Choose your best next permitted action; catalog visibility is not authorization.")
         request_transcript = Transcript.from_messages(context.transcript.dump())
         request_transcript.append_note(note)
-        if self._llm_call:
-            message, helper, request = await self._llm_call(request_transcript, schemas)
-        else:
-            message, helper, request = await self._llm(request_transcript, schemas)
+        call = self._llm_call or self._llm
+        message, helper, request = await call(request_transcript, schemas)
         helper = {
             **helper,
             "kind": helper.get("kind", "plain_decision"),
@@ -488,32 +488,25 @@ class PlainLlmDriver:
         )
 
     async def _llm(self, transcript, schemas):
-        base = os.environ.get("TEXT_MODEL_BASE_URL", "https://api.deepseek.com/v1").rstrip("/")
-        model = os.environ.get("TEXT_MODEL", "deepseek-chat")
-        request = {
-            "model": model,
-            "max_tokens": 8192,
-            "messages": transcript.llm_messages(),
-            "tools": schemas,
-            "tool_choice": "auto",
-            "parallel_tool_calls": False,
-        }
+        target, request, logged = prepare_request(
+            transcript, tools=schemas, tool_choice="auto", parallel_tool_calls=False)
         started = time.perf_counter()
         result = await post_json(
-            base + "/chat/completions", os.environ["DEEPSEEK_API_KEY"], request)
+            target.url, target.key, request)
         choice = result["choices"][0]
         helper = {
             "kind": "plain_decision",
-            "model": model,
+            "visual": target.visual,
+            "model": target.model,
             "latency_ms": round((time.perf_counter() - started) * 1000),
             "usage": result.get("usage", {}),
         }
         if choice.get("finish_reason") == "length":
             raise DriverRejected(
                 "Plain LLM decision was truncated by the token limit.",
-                helper_info={**helper, "request": request,
+                helper_info={**helper, "request": logged,
                              "response": choice.get("message")},
-                request=request,
+                request=logged,
                 details={"finish_reason": "length"},
             )
-        return choice["message"], helper, request
+        return choice["message"], helper, logged

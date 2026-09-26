@@ -6,6 +6,7 @@ import { useLiveElapsedMs } from "../hooks";
 import { escalationStats, LANE_INFO } from "../lane";
 import { ActivityRow } from "./ActivityRow";
 import { PhaseChip, Spinner } from "./StatusBits";
+import { costComplete, costText } from "../cost";
 
 const LANE_ICON: Record<Lane, string> = { jev: "⚡", baseline: "🤖" };
 
@@ -35,13 +36,16 @@ export function ActivityGroup({ lane, state, phase, error, onContinue, onAbort, 
   const metrics = state?.metrics ?? null;
   const esc = escalationStats(metrics);
   const decisionSteps = lane === "jev"
-    ? metrics?.routing?.jev_steps ?? state?.steps.length ?? 0
-    : metrics?.routing?.plain_steps ?? state?.steps.length ?? 0;
+    ? metrics?.routing?.decision_steps ?? state?.steps.length ?? 0
+    : metrics?.routing?.decision_steps ?? state?.steps.length ?? 0;
   const directSteps = lane === "jev"
-    ? metrics?.routing?.direct_jev_steps ?? Math.max(0, decisionSteps - esc.count)
+    ? metrics?.routing?.direct_jev_steps ?? state?.steps.filter((step) => step.model_calls?.length
+      && step.model_calls.every((call) => call.kind === "jev_decision") && !step.escalation && !step.outcome?.helper).length ?? 0
     : 0;
   const activity = state?.activity;
-  const activityLabel = activity
+  const activityLabel = activity?.stage === "executing" && state?.decisionFrame?.visualRead?.status === "running"
+    ? t("modelCallKind_visual_read") : activity && state?.decisionFrame?.llm?.kind === "visual_decision" && activity.stage === "authoring"
+    ? t("modelCallKind_visual_decision") : activity
     ? t(`activity_${activity.stage}`, {
       lane: lane === "jev" ? `${name}Loop` : t(LANE_INFO[lane].titleKey),
       operation: activity.operation ?? "",
@@ -170,7 +174,7 @@ export function ActivityGroup({ lane, state, phase, error, onContinue, onAbort, 
               value={`${metrics.helper.input_tokens} ↑ / ${metrics.helper.output_tokens} ↓`}
             />
             <MetricItem label={t("metricCacheHit")} value={`${metrics.helper.cache_hit_tokens}`} />
-            <MetricItem label={t("metricCost")} value={`$${metrics.est_cost_usd}`} />
+            <MetricItem label={t("metricCost")} value={costText(metrics.est_cost_usd, costComplete(metrics), lang === "zh")} />
           </div>
         </details>
       )}

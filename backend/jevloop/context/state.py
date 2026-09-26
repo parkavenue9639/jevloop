@@ -27,9 +27,9 @@ class DocRef:
     url: str = ""
 
 
-POOL_NAMES = ("chats", "docs", "recipients", "files", "directories")
+POOL_NAMES = ("chats", "docs", "recipients", "files", "directories", "visual_sources")
 POOL_VOCAB = {"chats": "chat", "docs": "doc", "recipients": "recipient", "files": "file",
-              "directories": "directory"}
+              "directories": "directory", "visual_sources": "image source"}
 
 # Bounded cross-turn attempt history retained for decisions: recent_steps stays
 # cross-turn (a new goal's decisions see prior operations), while per-turn
@@ -54,6 +54,7 @@ class Workspace:
     docs: dict = field(default_factory=dict)  # key -> DocRef
     recipients: dict = field(default_factory=dict)  # key -> display name
     files: dict = field(default_factory=dict)  # relpath -> relpath (sandbox)
+    images: dict = field(default_factory=dict)  # immutable admitted assets, no pixels
     observation_views: list = field(default_factory=list)  # bounded historical evidence, not inventory
     file_observation_mode: bool = False  # never revive a legacy inventory after its view expires
     messages: list = field(default_factory=list)  # gathered messages of the opened context
@@ -65,8 +66,24 @@ class Workspace:
     history: list = field(default_factory=list)  # executed actions, newest last
     turn_start: int = 0  # generic boundary: history[turn_start:] is the current turn
 
+    def remember_image(self, part):
+        """Recent reference window; durable history retains every occurrence."""
+        key = part["asset_id"]
+        self.images.pop(key, None)
+        self.images[key] = deepcopy(part)
+
     # -- generic pool view (question compiler & resolution work through this) --
     def pool_entries(self, pool: str) -> dict:
+        if pool == "visual_sources":
+            result = {
+                f"asset:{key}": PoolEntry(f"asset:{key}", part["name"] or key[:12],
+                                         {**part, "historical": True})
+                for key, part in reversed(list(self.images.items())[-20:])
+            }
+            # Structured observed file paths are optional load candidates,
+            # never proof that the file decodes as an image.
+            result.update(self.pool_entries("files"))
+            return result
         if pool == "chats":
             return {k: PoolEntry(k, c.name, {"preview": c.preview, "p2p": c.p2p,
                                              "via_user_id": c.via_user_id})
@@ -244,6 +261,12 @@ class Workspace:
             "known_docs": [{"title": d.title} for d in self.docs.values()],
             "recipients": list(self.recipients.values()),
             "known_files": list(self.pool_entries("files")),
+            **({"image_evidence": deepcopy(list(self.images.values())[-20:]),
+                "image_visibility": "metadata only; image availability does not mean its contents are known "
+                    "or that it must be read. Choose VIEW_IMAGE when pixels are needed for the task or its "
+                    "background context. Prior visual observations are bounded model interpretations; "
+                    "re-read for missing details or a new question, not merely because an image exists."}
+               if self.images else {}),
             "observation_views": deepcopy(self.observation_views),
             "opened_chat_messages": self.messages[-20:],
             "opened_doc_excerpt": self.doc_content[-1200:],

@@ -8,6 +8,8 @@ See docs/contracts/transcript-projection.md before adding record fields.
 import json
 from copy import deepcopy
 
+from jevloop.contracts.media import image_parts, transcript_images
+
 SYSTEM_BASE = (
     "You are an agent completing the user's goal with the tools below. Work in "
     "phases: gather what the goal needs, produce the deliverable, deliver it, "
@@ -30,11 +32,16 @@ def system_prompt(provider, cache_scope=None) -> str:
 class Transcript:
     """Append-only source; durable and model-facing snapshots are independent."""
 
-    def __init__(self, system: str, goal: str):
+    def __init__(self, system: str, goal: str, *, images=None):
         self._messages = [
             {"role": "system", "content": system},
             {"role": "user", "content": goal},
         ]
+        if images:
+            self._messages[-1]["images"] = image_parts(images)
+
+    def images(self):
+        return transcript_images(self._messages)
 
     def messages(self) -> list:
         """Compatibility alias. New model consumers must use llm_messages()."""
@@ -66,9 +73,13 @@ class Transcript:
                                "content": text})
         return text[:200]
 
-    def append_user(self, text: str):
+    def append_user(self, text: str, *, images=None):
         """A user turn — a new goal in an ongoing multi-turn session."""
-        self._messages.append({"role": "user", "content": text})
+        message = {"role": "user", "content": text}
+        if images:
+            message["images"] = image_parts(images)
+        transcript_images([*self._messages, message])
+        self._messages.append(message)
 
     def append_note(self, text: str):
         """Operational note turn (arbitration semantics); permanent for cache stability."""

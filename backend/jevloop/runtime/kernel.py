@@ -27,6 +27,7 @@ from jevloop.context.state import Workspace
 from jevloop.context.transcript import Transcript, system_prompt
 from jevloop.contracts.arguments import argument_target, argument_text, arguments_complete, validate_arguments
 from jevloop.contracts.authored import _clean, validate_authored_value
+from jevloop.contracts.media import MediaUnavailable
 from jevloop.contracts.policy import (
     AttemptFailure,
     Budget,
@@ -44,6 +45,7 @@ from jevloop.decision.drivers import DriverContext
 from jevloop.decision.model import observe_llm_call
 from jevloop.decision.questions import ANSWER_TEXT
 from jevloop.decision.text_helper import generate_text
+from jevloop.decision.visual_reader import read_visual
 from jevloop.runtime.metrics import RunMetrics
 
 CORE_ACTIONS = {"ANSWER", "DONE", "BLOCKED"}
@@ -64,7 +66,7 @@ class RuntimeKernel:
                  workspace=None, event_sink=None, checkpoint=None, cache_scope=None,
                  auto_acknowledge_unknown=False,
                  max_identical_failures=DEFAULT_MAX_IDENTICAL_FAILURES, arguer=None,
-                 max_stale_observations=DEFAULT_MAX_STALE_OBSERVATIONS):
+                 max_stale_observations=DEFAULT_MAX_STALE_OBSERVATIONS, visual_reader=None):
         self.driver = driver
         self.provider = provider
         self.policy = policy or WritePolicy()
@@ -82,6 +84,7 @@ class RuntimeKernel:
         self.auto_acknowledge_unknown = auto_acknowledge_unknown
         self._text = texter or generate_text
         self._arguments = arguer or generate_arguments
+        self._visual_reader = visual_reader or read_visual
         self._event_sink = event_sink
         self._checkpoint_hook = checkpoint
         self._cache_scope = cache_scope
@@ -92,11 +95,11 @@ class RuntimeKernel:
         self.max_identical_failures = max_identical_failures
         self.max_stale_observations = max_stale_observations
 
-    async def run(self, goal, before_step=None):
+    async def run(self, goal, before_step=None, *, images=None):
         if self.transcript is None:
             self.workspace.begin_turn(goal)
             self.transcript = Transcript(
-                system_prompt(self.provider, cache_scope=self._cache_scope), goal)
+                system_prompt(self.provider, cache_scope=self._cache_scope), goal, images=images)
         else:
             inserted = self.transcript.repair()
             if inserted:
@@ -165,7 +168,12 @@ class RuntimeKernel:
                 yield final
                 return
             self.workspace.begin_turn(goal)
-            self.transcript.append_user(goal)
+            self.transcript.append_user(goal, images=images)
+
+        for part in self.transcript.images():
+            self.workspace.remember_image(part)
+        if images:
+            await self._checkpoint()  # Persist admitted attachments before any model/effect.
 
         run_state = "running"
         while run_state == "running":
@@ -182,6 +190,9 @@ class RuntimeKernel:
             await self._emit({"type": "attempt_started", "attempt_id": attempt_id,
                               "step": self.budget.steps})
             helper_start = len(self.metrics.helper_calls)
+            # Visual tool execution uses a detached, complete history from
+            # before this attempt adds its pending assistant tool call.
+            tool_transcript = Transcript.from_messages(self.transcript.dump())
             step = {"model_calls": []}
             proposal = decision = intent = None
             dispatch_started = False
@@ -325,7 +336,10 @@ class RuntimeKernel:
                             "operation": intent["operation"],
                         })
                         dispatch_started = True
-                        outcome = await self._dispatch(intent)
+                        outcome = await self._dispatch(intent, visual_read=self._visual_read_callback(
+                            tool_transcript, attempt_id, intent["intent_id"], step["model_calls"]))
+                except EventSinkError:
+                    raise
                 except AttemptFailure as failure:
                     outcome = self._failure_outcome(failure, stage, intent,
                                                     dispatch_started)
@@ -972,7 +986,31 @@ class RuntimeKernel:
             return "stopped"
         return "running"
 
-    async def _dispatch(self, intent):
+    def _visual_read_callback(self, transcript, attempt_id, intent_id, model_calls):
+        """Scope perception to one selected tool execution and one source snapshot."""
+        async def visual_read(part):
+            helper = None
+            try:
+                observation, helper = await observe_llm_call(
+                    self._emit if self._event_sink is not None else None,
+                    {"attempt_id": attempt_id, "intent_id": intent_id,
+                     "kind": "visual_read", "operation": "VIEW_IMAGE"},
+                    self._visual_reader, transcript, part)
+                return observation
+            except EventSinkError:
+                raise
+            except Exception as failure:
+                helper = getattr(failure, "helper_info", None) or {
+                    "kind": "visual_read", "visual": True, "usage_unknown": True,
+                    "status": "failed", "request_not_confirmed": True}
+                raise
+            finally:
+                if helper:
+                    self.metrics.helper(helper, kind="visual_read")
+                    model_calls.append(helper)
+        return visual_read
+
+    async def _dispatch(self, intent, *, visual_read=None):
         operation = intent["operation"]
         target = intent.get("target")
         text = intent.get("text")
@@ -997,9 +1035,12 @@ class RuntimeKernel:
                 intent_id=intent["intent_id"],
                 idempotency_key=intent["idempotency_key"],
                 arguments=deepcopy(intent.get("arguments")),
+                visual_read=visual_read,
             ))
             if text:
                 outcome.setdefault("text", text[:4000])
+        except (EventSinkError, MediaUnavailable):
+            raise  # Persistence/capability failures are not tool-repairable.
         except Exception as error:  # noqa: BLE001 - effect may be indeterminate
             reason = f"{type(error).__name__}: {error}"
             if intent["write"] or intent["workspace_mutation"]:

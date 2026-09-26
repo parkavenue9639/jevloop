@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { control, fetchRuns, fetchSessionRuns, loadRecordedRun, startRun, useRunStream } from "./api";
-import type { RunParams, RunSummary } from "./types";
+import type { ImagePart, RunParams, RunSummary } from "./types";
 import { emptyStream, reduceEvents } from "./stream";
 import type { StreamData } from "./stream";
 import { emptyPlayback, playbackReducer, replayDelay, replayTimeline } from "./playback";
@@ -16,6 +16,8 @@ export interface ChatApi {
   starting: boolean;
   startError: string | null;
   pendingGoal: string | null;
+  pendingImages?: ImagePart[];
+  composerScope?: number;
   history: RunSummary[];
   sessionId: string | null;
   /** Loading a saved session/recording, not animated playback. */
@@ -40,6 +42,8 @@ export function useChat(): ChatApi {
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [snapshots, setSnapshots] = useState<Record<string, StreamData>>({});
   const [pendingGoal, setPendingGoal] = useState<string | null>(null);
+  const [pendingImages, setPendingImages] = useState<ImagePart[]>([]);
+  const [composerScope, setComposerScope] = useState(0);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [history, setHistory] = useState<RunSummary[]>([]);
@@ -84,7 +88,7 @@ export function useChat(): ChatApi {
     return () => window.clearTimeout(timer);
   }, [playback.status, playback.generation, playback.position, playback.timeline, playback.speed]);
 
-  useEffect(() => { if (stream.params) setPendingGoal(null); }, [stream.params]);
+  useEffect(() => { if (stream.params) { setPendingGoal(null); setPendingImages([]); } }, [stream.params]);
 
   const busy = useCallback(() => startingRef.current || replayingRef.current
     || playbackRef.current.status !== "idle"
@@ -93,6 +97,7 @@ export function useChat(): ChatApi {
   const adoptSession = useCallback(async (targetSession: string, sourceRuns: RunSummary[]) => {
     if (busy()) return;
     const epoch = ++loadEpoch.current;
+    setComposerScope((scope) => scope + 1);
     replayingRef.current = true;
     setReplaying(true);
     try {
@@ -114,6 +119,7 @@ export function useChat(): ChatApi {
       activeRef.current = runs[runs.length - 1].run_id;
       setActiveRunId(activeRef.current);
       setPendingGoal(null);
+      setPendingImages([]);
       setStartError(null);
       sessionRef.current = targetSession;
       setSessionId(targetSession);
@@ -142,12 +148,13 @@ export function useChat(): ChatApi {
   }, [activeRunId, stream.done, adoptSession]);
 
   const send = useCallback(async (params: RunParams) => {
-    if (!params.goal.trim() || busy()) return;
+    if ((!params.goal.trim() && !params.images?.length) || busy()) return;
     bootstrappedRef.current = true;
     const prev = activeRef.current;
     startingRef.current = true;
     setStartError(null);
     setPendingGoal(params.goal);
+    setPendingImages(params.images ?? []);
     setStarting(true);
     try {
       const { run_id: runId, session_id: sid } = await startRun({
@@ -163,7 +170,7 @@ export function useChat(): ChatApi {
       activeRef.current = runId;
       setActiveRunId(runId);
     } catch (error) {
-      if (mounted.current) { setStartError(String(error)); setPendingGoal(null); }
+      if (mounted.current) { setStartError(String(error)); setPendingGoal(null); setPendingImages([]); }
     } finally {
       startingRef.current = false;
       if (mounted.current) setStarting(false);
@@ -184,6 +191,8 @@ export function useChat(): ChatApi {
     if (busy()) return;
     bootstrappedRef.current = true;
     loadEpoch.current += 1;
+    setComposerScope((scope) => scope + 1);
+    setPendingImages([]);
     setSnapshots({}); setTurns([]); setActiveRunId(null);
     setHistoryComplete(true);
     activeRef.current = null;
@@ -199,6 +208,7 @@ export function useChat(): ChatApi {
     && turns.every((id) => (id === activeRunId ? stream : snapshots[id])?.done);
   const startPlayback = useCallback(async () => {
     if (!canPlayback || busy()) return;
+    setComposerScope((scope) => scope + 1);
     const epoch = ++loadEpoch.current;
     replayingRef.current = true;
     setReplaying(true); setStartError(null);
@@ -233,7 +243,7 @@ export function useChat(): ChatApi {
   return {
     turns: playingHistory ? playback.turns : turns, activeRunId: visibleRunId,
     stream: playingHistory ? (visibleRunId ? streamOf(visibleRunId) : emptyStream()) : stream,
-    streamOf, running, canControl, starting, startError, pendingGoal, history, sessionId, replaying,
+    streamOf, running, canControl, starting, startError, pendingGoal, pendingImages, composerScope, history, sessionId, replaying,
     playback, canPlayback, historyComplete, startPlayback, playbackAction,
     newSession, send, replay, replaySession, continueRun, abortRun,
   };

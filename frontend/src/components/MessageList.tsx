@@ -7,6 +7,7 @@ import type { StreamData } from "../stream";
 import type { ChatApi } from "../chat";
 import { ActivityGroup } from "./ActivityGroup";
 import { PairedTurn, UserBubble } from "./PairedTurn";
+import { imageParts } from "../media";
 
 /** One conversation turn. A paired run renders as a single experiment card
  *  with both lanes under the user's goal; a single-lane run stays an
@@ -16,13 +17,14 @@ function Turn({ runId, chat }: { runId: string; chat: ChatApi }) {
   const data: StreamData = chat.streamOf(runId);
   if (data.lanes.baseline != null) return <PairedTurn runId={runId} chat={chat} />;
   const goal = data.params ? String(data.params.goal ?? "") : "";
+  const images = imageParts(data.params?.images);
   const state = data.lanes.jev;
   const phase = lanePhase("jev", state, data.errors, data.done);
   const isActive = runId === chat.activeRunId && chat.canControl;
   const model = diagramModel(data.params, selectedProvider);
   return (
     <div className="flex flex-col gap-3">
-      {goal && <UserBubble goal={goal} />}
+      {(goal || images.length > 0) && <UserBubble goal={goal} images={images} />}
       <ActivityGroup
         lane="jev"
         state={state}
@@ -83,14 +85,14 @@ export function MessageList({ chat }: { chat: ChatApi }) {
           <Turn key={runId} runId={runId} chat={chat} />
         ))}
 
-        {chat.pendingGoal && (
+        {chat.pendingGoal !== null && (
           <div className="flex flex-col gap-3">
-            <UserBubble goal={chat.pendingGoal} />
+            <UserBubble goal={chat.pendingGoal} images={chat.pendingImages} />
             <ActivityGroup lane="jev" state={undefined} phase="running" model={selectedProvider} />
           </div>
         )}
 
-        {!chat.turns.length && !chat.pendingGoal && (
+        {!chat.turns.length && chat.pendingGoal === null && (
           <div className="rounded-xl border border-dashed border-line p-8 text-center text-sm leading-relaxed text-ink2">
             {t("welcome")}
           </div>

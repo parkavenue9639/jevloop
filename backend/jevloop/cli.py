@@ -18,6 +18,15 @@ from jevloop.paths import BACKEND_ROOT
 ENV_KEYS = (
     "TYPESAFE_API_KEY",
     "DEEPSEEK_API_KEY",
+    "TEXT_MODEL",
+    "TEXT_MODEL_BASE_URL",
+    "VISION_MODEL",
+    "VISION_MODEL_BASE_URL",
+    "VISION_MODEL_API_KEY",
+    "JEVLOOP_ASSETS_DIR",
+    "VISION_PRICE_IN_PER_MTOK",
+    "VISION_PRICE_OUT_PER_MTOK",
+    "VISION_PRICE_CACHE_HIT_PER_MTOK",
     "DECISION_PROVIDER",
     "LAYA_BASE_URL",
     "LAYA_API_KEY",
@@ -60,6 +69,8 @@ def build_parser():
 
     run = sub.add_parser("run", help="run one goal; dry-run by default")
     run.add_argument("goal")
+    run.add_argument("--image", action="append", default=[], metavar="PATH",
+                     help="attach a local image as immutable evidence (repeatable, max 8)")
     run.add_argument("--live", action="store_true", help="actually execute writes (still guarded)")
     run.add_argument("--max-steps", type=int, default=30)
     run.add_argument("--max-writes", type=int, default=0,
@@ -155,6 +166,21 @@ def _require_credentials():
 
 
 def cmd_run(args):
+    load_env_file()
+    from pathlib import Path
+
+    from jevloop.storage import assets
+
+    images = []
+    paths = getattr(args, "image", [])
+    if paths:
+        if len(paths) > assets.MAX_IMAGES:
+            raise ValueError(f"At most {assets.MAX_IMAGES} image attachments are supported.")
+        for path in paths:
+            with Path(path).open("rb") as handle:
+                images.append(assets.ingest_image(handle.read(assets.MAX_IMAGE_BYTES + 1), name=Path(path).name))
+        if sum(assets.image_size(part) for part in images) > assets.MAX_REQUEST_IMAGE_BYTES:
+            raise ValueError("Image attachments exceed the aggregate byte budget.")
     _require_credentials()
 
     import asyncio
@@ -176,6 +202,7 @@ def cmd_run(args):
                 "max_steps": args.max_steps,
                 "max_writes": args.max_writes,
                 "sandbox_network": args.sandbox_network,
+                "images": images,
             },
             "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         })
@@ -202,7 +229,7 @@ def cmd_run(args):
                 max_writes=args.max_writes,
                 event_sink=lambda event: journal.emit({**event, "lane": "jev"}),
             )
-            async for step in kernel.run(args.goal):
+            async for step in kernel.run(args.goal, images=images):
                 journal.emit({"type": "step", "lane": "jev", "step": step})
                 journal.emit({
                     "type": "metrics", "lane": "jev", "metrics": kernel.metrics.summary()})

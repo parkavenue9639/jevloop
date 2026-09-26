@@ -29,17 +29,26 @@ export function loopView(state: LaneState | undefined, options: {
 
   const step = options.step ?? (state?.decisionFrame ? undefined : state?.steps.at(-1));
   const calls = step?.model_calls;
+  const visualRead = (options.step ? false : !!state?.decisionFrame?.visualRead)
+    || !!calls?.some((call) => call.kind === "visual_read");
+  const visual = (options.step ? false : state?.decisionFrame?.llm?.kind === "visual_decision")
+    || step?.decision.decision_source === "visual_llm"
+    || !!calls?.some((call) => call.kind === "visual_decision");
+  // The compact LLM circuit has one decision node for decision + parameters.
+  if ((options.baseline || visual) && active === "authoring") active = "decision";
   // Legacy records without model calls cannot establish an LLM-free route.
-  const assisted = options.baseline || !!step?.escalation || !!step?.outcome?.helper
-    || calls?.some((call) => call.kind !== "jev_decision");
-  const direct = !options.baseline && !!calls?.length && !assisted;
+  // visual_read runs inside the tool: it is neither decision assistance nor
+  // an LLM-free execution, so it must not highlight either of those routes.
+  const assisted = options.baseline || visual || !!step?.escalation || !!step?.outcome?.helper
+    || calls?.some((call) => call.kind !== "jev_decision" && call.kind !== "visual_read");
+  const direct = !options.baseline && !!calls?.length && !assisted && !visualRead;
   const decisionObserved = !!calls?.length || step?.decision.confidence != null || step?.decision.latency_ms != null;
   const route: LoopNode[] = step && decisionObserved ? ["state", "decision"] : [];
-  if (assisted && !options.baseline) route.push("authoring");
+  if (assisted && !options.baseline && !visual) route.push("authoring");
   if (direct) route.push("binding");
   if (step?.outcome || step?.denied || step?.aborted) route.push("kernel");
   if (step) route.push("evidence");
-  return { status, active, route, step, direct, assisted, blocked: !!(step?.denied || step?.aborted) };
+  return { status, active, route, step, direct, assisted, visual, visualRead, blocked: !!(step?.denied || step?.aborted) };
 }
 
 export function formatTime(ms: number | null | undefined): string {

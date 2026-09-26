@@ -1,6 +1,7 @@
 import type { DecisionProvider, LanePhase, LaneState, Metrics } from "../types";
 import { modelName } from "../diagramModel";
-import { useT } from "../i18n";
+import { useLang, useT } from "../i18n";
+import { costComplete, costText } from "../cost";
 
 interface Cell {
   text: string;
@@ -41,12 +42,13 @@ function outcomeText(t: T, phase: LanePhase | undefined, state: LaneState | unde
   }
 }
 
-function rowsFor(t: T, jev: LaneState, baseline: LaneState | undefined, phases: LanePhases, name: string): Row[] {
+function rowsFor(t: T, jev: LaneState, baseline: LaneState | undefined, phases: LanePhases, name: string, zh: boolean): Row[] {
   const j: MetricsLike = jev.metrics;
   const b: MetricsLike = baseline?.metrics;
   const cell = (text: string, value?: number | null): Cell => ({ text, value });
   const split = (metrics: MetricsLike) => {
     if (!metrics) return "–";
+    if (!costComplete(metrics)) return t("costNotComparable");
     const roleTotal = metrics.jev.est_cost_usd + metrics.helper.est_cost_usd;
     if (roleTotal <= 0) return "–";
     const jevShare = metrics.jev.est_cost_usd / roleTotal * 100;
@@ -115,19 +117,18 @@ function rowsFor(t: T, jev: LaneState, baseline: LaneState | undefined, phases: 
     },
     {
       labelKey: "rowLlmCost",
-      jev: cell(j ? `$${j.helper.est_cost_usd.toFixed(6)}` : "–", j?.helper.est_cost_usd),
-      baseline: cell(b ? `$${b.helper.est_cost_usd.toFixed(6)}` : "–",
-                     b?.helper.est_cost_usd),
+      jev: cell(costText(j?.helper.est_cost_usd, costComplete(j), zh), costComplete(j) ? j?.helper.est_cost_usd : null),
+      baseline: cell(costText(b?.helper.est_cost_usd, costComplete(b), zh), costComplete(b) ? b?.helper.est_cost_usd : null),
     },
     {
       labelKey: "rowCostShare",
-      jev: cell(split(j)),
-      baseline: cell(b ? `${name} 0.0% · LLM 100.0%` : "–"),
+      jev: cell(costComplete(j) && costComplete(b) ? split(j) : t("costNotComparable")),
+      baseline: cell(b ? costComplete(j) && costComplete(b) ? `${name} 0.0% · LLM 100.0%` : t("costNotComparable") : "–"),
     },
     {
       labelKey: "rowCost",
-      jev: cell(j ? `$${j.est_cost_usd.toFixed(6)}` : "–", j?.est_cost_usd),
-      baseline: cell(b ? `$${b.est_cost_usd.toFixed(6)}` : "–", b?.est_cost_usd),
+      jev: cell(costText(j?.est_cost_usd, costComplete(j), zh), costComplete(j) ? j?.est_cost_usd : null),
+      baseline: cell(costText(b?.est_cost_usd, costComplete(b), zh), costComplete(b) ? b?.est_cost_usd : null),
     },
     {
       labelKey: "rowLark",
@@ -174,8 +175,9 @@ export function CompareTable({ jev, baseline, phases, model = "jev" }: {
   model?: DecisionProvider;
 }) {
   const t = useT();
+  const { lang } = useLang();
   const name = modelName(model);
-  const rows = rowsFor(t, jev, baseline, phases, name);
+  const rows = rowsFor(t, jev, baseline, phases, name, lang === "zh");
   const showBaseline = baseline != null;
   const jt = jev.metrics?.elapsed_ms;
   const bt = baseline?.metrics?.elapsed_ms;
@@ -237,7 +239,10 @@ export function CompareTable({ jev, baseline, phases, model = "jev" }: {
         </tbody>
       </table>
       <p className="mt-2 text-[11px] text-ink2">{t("compareNote")}</p>
-      {pricing && (
+      {(!costComplete(jev.metrics) || !costComplete(baseline?.metrics)) && <p className="mt-1 text-[11px] text-ink2">{t("costNotComparable")}</p>}
+      {pricing && costComplete(jev.metrics) && costComplete(baseline?.metrics)
+        && !(jev.metrics?.routing?.visual_steps || baseline?.metrics?.routing?.visual_steps)
+        && ![...jev.steps, ...(baseline?.steps ?? [])].some((step) => step.model_calls?.some((call) => call.kind === "visual_read")) && (
         <p className="mt-1 text-[10px] text-ink2">
           {t("pricingNote", {
             j: pricing.jev_input_per_mtok,

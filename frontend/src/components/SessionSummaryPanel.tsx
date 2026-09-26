@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { SessionComparison } from "../comparison";
 import { modelName } from "../diagramModel";
-import { useT } from "../i18n";
+import { useLang, useT } from "../i18n";
+import { costComplete, costText } from "../cost";
 import { CompareTable } from "./CompareTable";
 import { EscalationStatsBlock } from "./PairedTurn";
 
@@ -12,6 +13,7 @@ import { EscalationStatsBlock } from "./PairedTurn";
  *  the chat for vertical space. */
 export function SessionSummaryPanel({ comparison }: { comparison: SessionComparison }) {
   const t = useT();
+  const { lang } = useLang();
   const [open, setOpen] = useState(false);
   const name = modelName(comparison.model);
   const jm = comparison.jev.metrics;
@@ -37,14 +39,14 @@ export function SessionSummaryPanel({ comparison }: { comparison: SessionCompari
               {t("sessionLaneSummary", {
                 lane: `${name}Loop`,
                 time: `${(jm.elapsed_ms / 1000).toFixed(1)}s`,
-                cost: jm.est_cost_usd,
+                cost: costText(jm.est_cost_usd, costComplete(jm), lang === "zh"),
               })}
             </span>
             <span className="num rounded-full bg-surface px-2 py-0.5">
               {t("sessionLaneSummary", {
                 lane: t("baseLane"),
                 time: `${(bm.elapsed_ms / 1000).toFixed(1)}s`,
-                cost: bm.est_cost_usd,
+                cost: costText(bm.est_cost_usd, costComplete(bm), lang === "zh"),
               })}
             </span>
           </span>

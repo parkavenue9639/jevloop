@@ -28,6 +28,15 @@ validation, authorization, dispatch, durability and model-context projections.
                     append to Transcript
 ```
 
+Image-bearing sessions retain their normal Jev or plain-LLM decision driver.
+`VIEW_IMAGE` is a selected tool execution: it captures the selected image and
+uses contextual visual perception to produce a source-attributed observation.
+Typed image references and observations remain in the same durable transcript.
+Ordinary LLM requests see references and observations, not implicit pixels;
+only the selected visual-reading request materializes native image parts.
+The next decision uses the normal loop. See the
+[multimodal evidence contract](contracts/multimodal-evidence.md).
+
 The plain lane makes its proposal through the LLM view. It does not bypass the
 shared kernel or gain a different tool policy. The diagram's stable catalog
 applies to canonical parameter, arbitration and plain requests; the retained

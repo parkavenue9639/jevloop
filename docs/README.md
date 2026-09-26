@@ -13,6 +13,7 @@ recorded revision and are not a rolling statement about the latest code.
 | [Transcript projections](contracts/transcript-projection.md) | One durable source; independent Jev and LLM contexts |
 | [Observation views](contracts/observation-views.md) | Evidence-derived references and complete invocation candidates |
 | [Stable LLM tools](contracts/llm-cache.md) | Complete arguments or operation-only LLM generation; stable schemas |
+| [Multimodal evidence](contracts/multimodal-evidence.md) | Immutable images and contextual VIEW_IMAGE execution inside the normal loop |
 
 The architecture overview is a map; the focused contracts own their detailed
 invariants. If a contract and implementation disagree, investigate and update

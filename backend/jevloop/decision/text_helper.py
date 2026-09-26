@@ -8,11 +8,11 @@ response, or an unexpected tool call fails as a recoverable
 MALFORMED_AUTHORED_VALUE observation instead of being written as if it were the
 requested value."""
 
-import os
 import time
 
 from jevloop.contracts.authored import _MAX_LEN, _clean
 from jevloop.contracts.policy import MalformedAuthoredValue
+from jevloop.decision.llm_transport import model_target, prepare_request
 from jevloop.decision.model import post_json
 
 
@@ -27,16 +27,15 @@ async def generate_text(transcript, instruction: str, post=None, field=None,
     refusal, unusable or truncated output, an unexpected tool call, or a closed
     parameter that is not the requested `field` — typed, recoverable pre-dispatch
     failures; nothing is appended to the ledger when one fires."""
-    key = os.environ.get("DEEPSEEK_API_KEY") or ""
+    target = model_target()
+    key = target.key
     if not key and post is None:  # injected posts (tests) don't need a real key
         raise ValueError("Text generation needs DEEPSEEK_API_KEY; nothing is hardcoded.")
     transcript.append_user(f"[content request] {instruction}")
-    base = os.environ.get("TEXT_MODEL_BASE_URL", "https://api.deepseek.com/v1").rstrip("/")
-    model = os.environ.get("TEXT_MODEL", "deepseek-chat")
     started = time.perf_counter()
-    request = {"model": model, "max_tokens": 8192, "messages": transcript.llm_messages()}
+    target, request, logged = prepare_request(transcript)
     result = await (post or post_json)(
-        base + "/chat/completions",
+        target.url,
         key,
         request,
     )
@@ -44,10 +43,11 @@ async def generate_text(transcript, instruction: str, post=None, field=None,
     message = choice["message"]
     helper_info = {
         "kind": "authoring",
-        "model": model,
+        "model": target.model,
+        "visual": target.visual,
         "latency_ms": round((time.perf_counter() - started) * 1000),
         "usage": result.get("usage", {}),
-        "request": request,
+        "request": logged,
         "response": message,
     }
     if _truncated_choice(choice):

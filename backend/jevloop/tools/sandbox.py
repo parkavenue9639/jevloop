@@ -7,12 +7,15 @@ content addressed — starts any number of isolated containers (comparison
 lanes each get their own), and every file or shell operation is a
 `docker exec` argv call: no host shell, no host paths, no network and no
 capabilities inside the container. The container is injected into
-SandboxTools; this module never touches the host filesystem. `live` governs
+SandboxTools; source files are never read from the host filesystem. Image
+captures are persisted through the dedicated immutable asset adapter. `live` governs
 domain (Lark) writes only — local file and bash operations always execute
 for real inside the container.
 """
 
 import asyncio
+import base64
+import binascii
 import hashlib
 import json
 import re
@@ -21,8 +24,10 @@ import tempfile
 import uuid
 from pathlib import Path
 
+from jevloop.contracts.policy import EventSinkError
 from jevloop.contracts.tools import ToolContext, ToolSpec
 from jevloop.paths import BACKEND_ROOT
+from jevloop.storage import assets
 
 DOCKER_DIR = BACKEND_ROOT / "docker" / "sandbox"
 DEFAULT_SEED = DOCKER_DIR / "seed"
@@ -77,10 +82,35 @@ def validate_arguments(name, arguments):
             raise ValueError(f"invalid_regex: {error}") from error
     if name == "BASH" and not args["command"].strip():
         raise ValueError("empty command")
+    if name == "VIEW_IMAGE":
+        source = args["source"]
+        if source.startswith("asset:"):
+            if not assets.ASSET_ID.fullmatch(source[6:]):
+                raise ValueError("invalid image asset reference")
+        else:
+            if ":" in source:
+                raise ValueError("VIEW_IMAGE accepts only sandbox-relative files or observed asset IDs")
+            args["source"] = validate_relpath(source)
     return args
 
 
 SPECS = [
+    ToolSpec(
+        name="VIEW_IMAGE",
+        description="Read and understand a selected image from a sandbox-relative file or an observed "
+                    "asset:<id>. Returns task-contextual visual observations, including text, layout "
+                    "and uncertainty. Use when visual information is needed to perform the task, "
+                    "including background context even if the user did not explicitly ask to analyze "
+                    "an image. Metadata and filenames do not reveal pixels. Re-read for new questions "
+                    "or missing details; image presence alone does not require reading it.",
+        observation_kinds=("file",),
+        phases=("INSPECT", "VERIFY"),
+        target_pool="visual_sources", target_parameter="source",
+        binding_defaults={"detail": "auto"},
+        parameters=parameters({"source": {"type": "string", "minLength": 1, "maxLength": 512},
+                               "detail": {"type": "string", "enum": ["auto", "high"]}}, ["source"]),
+        argument_validator=lambda args: validate_arguments("VIEW_IMAGE", args),
+    ),
     ToolSpec(
         name="LIST_FILES",
         observation_kinds=("file", "directory"),
@@ -370,6 +400,9 @@ class DockerSandboxContainer:
         return await self._file_query("read-range", {
             "name": validate_relpath(path), "offset": offset, "limit": limit})
 
+    async def read_image(self, path) -> dict:
+        return await self._file_query("read-image", {"name": validate_relpath(path)})
+
     async def search_files(self, path=".", pattern="", glob="*", limit=20) -> dict:
         return await self._file_query("search", {
             "name": validate_relpath(path), "pattern": pattern, "glob": glob, "limit": limit})
@@ -489,7 +522,7 @@ class SandboxTools:
     async def execute(self, name: str, ctx: ToolContext) -> dict:
         if name not in {spec.name for spec in SPECS}:
             raise KeyError(f"unknown tool {name}")
-        if self._runtime is None:
+        if self._runtime is None and name != "VIEW_IMAGE":
             raise RuntimeError("SandboxTools needs an injected sandbox runtime "
                                "(start a DockerSandboxContainer and pass it in)")
         workspace = ctx.workspace
@@ -505,6 +538,8 @@ class SandboxTools:
                 return await self._list_page(workspace, args)
             if name == "READ_FILE":
                 return await self._read_ranges(workspace, args)
+            if name == "VIEW_IMAGE":
+                return await self._view_image(workspace, args, ctx.visual_read)
             if name == "SEARCH_FILES":
                 return await self._search(workspace, args)
             if name == "WRITE_FILE":
@@ -521,9 +556,47 @@ class SandboxTools:
             return await self._read_file(workspace, ctx.target)
         if name == "WRITE_FILE":
             return await self._write_file(ctx)
-        if name == "SEARCH_FILES":
-            raise ValueError("SEARCH_FILES requires canonical arguments")
+        if name in {"SEARCH_FILES", "VIEW_IMAGE"}:
+            raise ValueError(f"{name} requires canonical arguments")
         return await self._bash(workspace, ctx)
+
+    async def _view_image(self, workspace, args, visual_read=None):
+        source = args["source"]
+        try:
+            if source.startswith("asset:"):
+                admitted = getattr(workspace, "images", {}).get(source[6:])
+                if admitted is None:
+                    raise assets.AssetError("image asset has not been observed in this workspace")
+                part = assets.resolve_image({**admitted, "detail": args["detail"]})
+                references = []
+            else:
+                if self._runtime is None:
+                    raise assets.AssetError("VIEW_IMAGE file capture requires a sandbox runtime")
+                result = await self._runtime.read_image(source)
+                if result.get("status") == "error":
+                    return self._query_error(result, source)
+                encoded = result.get("data")
+                if not isinstance(encoded, str) or len(encoded) > 4 * ((assets.MAX_IMAGE_BYTES + 2) // 3):
+                    raise assets.AssetError("sandbox image payload is invalid or over budget")
+                data = base64.b64decode(encoded, validate=True)
+                part = assets.ingest_image(data, name=source, detail=args["detail"])
+                workspace.files[source] = source
+                references = [("file", source)]
+            if visual_read is None:
+                raise assets.AssetError("VIEW_IMAGE requires a visual reader capability")
+            observation = await visual_read(part)
+            if not isinstance(observation, str) or not observation.strip():
+                raise assets.AssetError("Visual reader returned no usable observation")
+            return {"status": "ready", "action": f"view_image({source})", "images": [part],
+                    "observation": self._observation(
+                        source, f"Visual model observation of asset:{part['asset_id']} "
+                        f"(detail={part['detail']}; interpretation may be incomplete or mistaken):\n"
+                        + observation.strip(), references, False)}
+        except EventSinkError:
+            raise
+        except (assets.AssetError, binascii.Error, OSError, ValueError) as error:
+            return {"status": "failed", "reason": str(error)[:500],
+                    "effect_disposition": "NOT_APPLIED", "effect_proof": "pre_effect"}
 
     @staticmethod
     def _observation(scope, evidence, references, truncated, **metadata):
