@@ -85,7 +85,12 @@ def violations(relative_path, source):
                 reason = "subpackage must not import the root CLI"
             elif target in LEGACY_ROOT_MODULES or module.startswith("jevloop.tools.base"):
                 reason = "obsolete flat/adapter module import"
-            elif layer and target not in ALLOWED[layer]:
+            elif layer and target not in ALLOWED[layer] and not (
+                # Explicit I/O adapters resolve immutable assets; pure context
+                # projection still cannot import storage or inspect files.
+                relative_path in {"decision/llm_transport.py", "tools/sandbox.py"}
+                and module in {"jevloop.storage.assets", "jevloop.storage"}
+            ):
                 reason = f"{layer} must not depend on {target or 'package root'}"
             elif layer == "storage" and module.startswith("jevloop.context.llm_context"):
                 reason = "storage must persist durable records, not the LLM projector"

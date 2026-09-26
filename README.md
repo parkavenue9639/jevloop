@@ -252,6 +252,14 @@ cp env.example .env
 # Set TYPESAFE_API_KEY and DEEPSEEK_API_KEY.
 ```
 
+For visual reading via `VIEW_IMAGE`, also configure `VISION_MODEL`,
+`VISION_MODEL_BASE_URL` and `VISION_MODEL_API_KEY` with a vision-capable
+Chat Completions model. Images are immutable transcript evidence and appear in
+history/replay. Jev still decides whether to read uploaded or sandbox images,
+including images needed as task context. `VIEW_IMAGE` returns contextual visual
+observations; the next decision returns to the normal Jev loop.
+See [image setup and limits](backend/README.md#image-inputs).
+
 To decide with local Laya instead of hosted Jev, install one extra in this
 project's uv environment and start its server. Apple Silicon uses MLX. An
 NVIDIA machine uses CUDA. `DECISION_PROVIDER=laya` then sends the same

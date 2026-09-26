@@ -8,6 +8,8 @@ are invisible by default; resource text and nested provider data remain data.
 import json
 from copy import deepcopy
 
+from jevloop.contracts.media import record_images
+
 RESULT_CAP = 12000
 _EXECUTION_FIELDS = (
     "status", "created", "exit", "dry_run", "reason", "receipt",
@@ -171,5 +173,8 @@ def project_llm_messages(records):
             except (ValueError, TypeError):
                 result = content
             message["content"] = _serialize(result_view(result, calls.get(message.get("tool_call_id"))))
+        images = record_images(record)
+        if images:
+            message["images"] = images
         messages.append(message)
     return messages

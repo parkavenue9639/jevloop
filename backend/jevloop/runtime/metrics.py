@@ -1,5 +1,6 @@
 """Run metrics: per-call timings and token accounting for every model and lark-cli call."""
 
+import math
 import os
 import statistics
 import time
@@ -49,7 +50,8 @@ class RunMetrics:
         usage = (info or {}).get("usage", {})
         input_tokens = int(usage.get("prompt_tokens", 0) or 0)
         output_tokens = int(usage.get("completion_tokens", 0) or 0)
-        cache_hit = min(input_tokens, int(usage.get("prompt_cache_hit_tokens", 0) or 0))
+        cache_hit = min(input_tokens, int(usage.get("prompt_cache_hit_tokens",
+                        (usage.get("prompt_tokens_details") or {}).get("cached_tokens", 0)) or 0))
         reported_miss = usage.get("prompt_cache_miss_tokens")
         if reported_miss is None:
             cache_miss = input_tokens - cache_hit
@@ -60,6 +62,18 @@ class RunMetrics:
                 input_tokens - cache_hit, max(0, int(reported_miss or 0)))
             cache_unknown = input_tokens - cache_hit - cache_miss
             miss_source = "reported"
+        prices = [DEEPSEEK_INPUT_PRICE_PER_MTOK, DEEPSEEK_OUTPUT_PRICE_PER_MTOK,
+                  DEEPSEEK_CACHE_HIT_PRICE_PER_MTOK]
+        if (info or {}).get("visual"):
+            try:
+                prices = [float(os.environ[name]) for name in (
+                    "VISION_PRICE_IN_PER_MTOK", "VISION_PRICE_OUT_PER_MTOK", "VISION_PRICE_CACHE_HIT_PER_MTOK")]
+                if any(not math.isfinite(price) or price < 0 for price in prices):
+                    prices = None
+            except (KeyError, ValueError):
+                prices = None
+        if (info or {}).get("usage_unknown"):
+            prices = None  # Unknown usage is not confirmed-free inference.
         self.helper_calls.append({
             "kind": kind or (info or {}).get("kind") or "unknown",
             "model": (info or {}).get("model"),
@@ -70,6 +84,7 @@ class RunMetrics:
             "cache_miss_tokens": cache_miss,
             "cache_unknown_tokens": cache_unknown,
             "cache_miss_source": miss_source,
+            "prices": prices,
         })
 
     def step(self, driver, operation, helper_start):
@@ -100,11 +115,13 @@ class RunMetrics:
         cache_hit = sum(call["cache_hit_tokens"] for call in calls)
         cache_miss = sum(call["cache_miss_tokens"] for call in calls)
         cache_unknown = sum(call["cache_unknown_tokens"] for call in calls)
-        cost = (
-            cache_hit * DEEPSEEK_CACHE_HIT_PRICE_PER_MTOK
-            + (cache_miss + cache_unknown) * DEEPSEEK_INPUT_PRICE_PER_MTOK
-            + output_tokens * DEEPSEEK_OUTPUT_PRICE_PER_MTOK
-        ) / 1e6
+        cost = 0
+        for call in calls:
+            prices = call.get("prices", [DEEPSEEK_INPUT_PRICE_PER_MTOK,
+                                        DEEPSEEK_OUTPUT_PRICE_PER_MTOK, DEEPSEEK_CACHE_HIT_PRICE_PER_MTOK])
+            if prices is not None:
+                cost += ((call["cache_miss_tokens"] + call["cache_unknown_tokens"]) * prices[0]
+                         + call["output_tokens"] * prices[1] + call["cache_hit_tokens"] * prices[2]) / 1e6
         return {
             "calls": len(calls),
             "input_tokens": input_tokens,
@@ -117,6 +134,8 @@ class RunMetrics:
             "cache_miss_derived_calls": sum(
                 call["cache_miss_source"] == "derived" for call in calls),
             "est_cost_usd": round(cost, 6),
+            "cost_complete": all(call.get("prices", []) is not None for call in calls),
+            "unpriced_calls": sum(call.get("prices", []) is None for call in calls),
         }
 
     def summary(self):
@@ -168,8 +187,10 @@ class RunMetrics:
                 ),
                 "plain_steps": sum(
                     step["driver"] == "plain" for step in self.step_profiles),
+                "visual_steps": sum(step["driver"] == "visual" for step in self.step_profiles),
             },
             "est_cost_usd": round(cost, 6),
+            "cost_complete": helper["cost_complete"],
             "pricing": {
                 "jev_input_per_mtok": JEV_INPUT_PRICE_PER_MTOK,
                 "llm_input_per_mtok": DEEPSEEK_INPUT_PRICE_PER_MTOK,

@@ -3,13 +3,15 @@ import { useT } from "../i18n";
 import { diagramModel, modelName } from "../diagramModel";
 import { useDecisionChoice } from "../decisionChoice";
 import { escalationStats, LANE_INFO, laneErrorMessage, lanePhase } from "../lane";
-import type { DecisionProvider, Lane, LaneState } from "../types";
+import type { DecisionProvider, ImagePart, Lane, LaneState } from "../types";
+import { imageParts } from "../media";
+import { ImageAttachments } from "./ImageAttachments";
 import type { ChatApi } from "../chat";
 import { ActivityGroup } from "./ActivityGroup";
 import { CompareTable } from "./CompareTable";
 
 /** The user's goal for one turn, right-aligned like any chat bubble. */
-export function UserBubble({ goal }: { goal: string }) {
+export function UserBubble({ goal, images = [] }: { goal: string; images?: ImagePart[] }) {
   return (
     <div className="flex justify-end">
       <div
@@ -17,6 +19,7 @@ export function UserBubble({ goal }: { goal: string }) {
         className="max-w-[85%] break-words whitespace-pre-wrap rounded-2xl bg-accent px-4 py-2.5 text-sm leading-relaxed text-white"
       >
         {goal}
+        <ImageAttachments images={images} />
       </div>
     </div>
   );
@@ -64,6 +67,7 @@ export function PairedTurn({ runId, chat }: { runId: string; chat: ChatApi }) {
   const t = useT();
   const data = chat.streamOf(runId);
   const goal = data.params ? String(data.params.goal ?? "") : "";
+  const images = imageParts(data.params?.images);
   const model = diagramModel(data.params, useDecisionChoice().provider);
   const jev = data.lanes.jev;
   const baseline = data.lanes.baseline;
@@ -76,7 +80,7 @@ export function PairedTurn({ runId, chat }: { runId: string; chat: ChatApi }) {
 
   return (
     <div className="flex flex-col gap-3">
-      {goal && <UserBubble goal={goal} />}
+      {(goal || images.length > 0) && <UserBubble goal={goal} images={images} />}
       <section
         data-testid="paired-turn"
         className="soft-lift flex min-w-0 flex-col gap-3 rounded-2xl border border-line bg-surface2/40 p-2.5 sm:p-3"

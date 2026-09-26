@@ -81,6 +81,7 @@ def test_summary_reports_call_roles_cache_provenance_and_jev_avoidance():
         "llm_assisted_jev_steps": 1,
         "llm_avoidance_rate": 0.5,
         "plain_steps": 0,
+        "visual_steps": 0,
     }
     assert summary["helper"]["cache_hit_tokens"] == 600
     assert summary["helper"]["cache_miss_tokens"] == 300

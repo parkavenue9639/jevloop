@@ -9,16 +9,18 @@ import { laneErrorMessage } from "../lane";
 import { formatCost, formatTime, loopView } from "../loopView";
 import { LoopDiagram } from "./LoopDiagram";
 import { ActivityRow } from "./ActivityRow";
+import { costComplete, costText } from "../cost";
 
-function Meter({ title, jev, baseline, format, label }: {
+function Meter({ title, jev, baseline, format, label, jevText, baselineText, comparable = true }: {
   title: string; jev?: number | null; baseline?: number | null; format: (value: number | null | undefined) => string; label: string;
+  jevText?: string; baselineText?: string; comparable?: boolean;
 }) {
   const max = Math.max(jev ?? 0, baseline ?? 0, Number.EPSILON);
   return <div className="console-meter">
     <div className="meter-title">{title}</div>
     {([[`${label}Loop`, jev, "jev"], ["LLM-only", baseline, "llm"]] as const).map(([name, value, tone]) => (
-      <div className={`meter-row tone-${tone}`} key={name}>
-        <span>{name}</span><div className="meter-track"><i style={{ width: `${((value ?? 0) / max) * 100}%` }} /></div><strong>{format(value)}</strong>
+      <div className={`meter-row tone-${tone} ${comparable ? "" : "is-incomplete"}`} key={name}>
+        <span>{name}</span><div className="meter-track">{comparable && <i style={{ width: `${((value ?? 0) / max) * 100}%` }} />}</div><strong>{(tone === "jev" ? jevText : baselineText) ?? format(value)}</strong>
       </div>
     ))}
   </div>;
@@ -32,7 +34,8 @@ function Telemetry({ state, decisionLabel }: { state?: LaneState; decisionLabel:
   return <div className="telemetry-grid">
     <div><span>{lang === "zh" ? `${decisionLabel} 调用` : `${decisionLabel} calls`}</span><strong>{m?.jev.calls ?? "—"}</strong></div>
     <div><span>{lang === "zh" ? "LLM 调用" : "LLM calls"}</span><strong>{m?.helper.calls ?? "—"}</strong></div>
-    <div><span>{lang === "zh" ? "无 LLM 步骤" : "LLM-free steps"}</span><strong>{routing ? `${routing.direct_jev_steps}/${routing.jev_steps}` : "—"}</strong></div>
+    <div><span>{lang === "zh" ? "无 LLM 步骤" : "LLM-free steps"}</span><strong>{routing ? `${routing.direct_jev_steps}/${routing.decision_steps}` : "—"}</strong></div>
+    {routing?.visual_steps != null && <div><span>{lang === "zh" ? "视觉 LLM 步骤" : "Vision LLM steps"}</span><strong>{routing.visual_steps}</strong></div>}
     <div><span>{lang === "zh" ? "输入缓存命中" : "Input cache hit"}</span><strong>{hit == null ? "—" : `${(hit * 100).toFixed(1)}%`}</strong></div>
   </div>;
 }
@@ -81,7 +84,10 @@ function Inspector({ data, live, replaying, scope, sceneKey }: { data: StreamDat
         <div className="panel-heading"><span className="eyebrow">{lang === "zh" ? "双路遥测" : "RUN TELEMETRY"}</span><span className="telemetry-mark">{base ? "A / B" : "A"}</span></div>
         <div className="telemetry-intro"><span>{metricScope}</span><h3>{lang === "zh" ? "观察每一次决策。" : "Every decision, visible."}</h3></div>
         <Meter title={lang === "zh" ? "累计耗时" : "Elapsed time"} jev={jev?.metrics?.elapsed_ms} baseline={base?.metrics?.elapsed_ms} format={formatTime} label={decisionLabel} />
-        <Meter title={lang === "zh" ? "预估成本 / USD" : "Estimated cost / USD"} jev={jev?.metrics?.est_cost_usd} baseline={base?.metrics?.est_cost_usd} format={formatCost} label={decisionLabel} />
+        <Meter title={lang === "zh" ? "预估成本 / USD" : "Estimated cost / USD"} jev={jev?.metrics?.est_cost_usd} baseline={base?.metrics?.est_cost_usd} format={formatCost} label={decisionLabel}
+          comparable={costComplete(jev?.metrics) && costComplete(base?.metrics)}
+          jevText={costText(jev?.metrics?.est_cost_usd, costComplete(jev?.metrics), lang === "zh", 5)}
+          baselineText={costText(base?.metrics?.est_cost_usd, costComplete(base?.metrics), lang === "zh", 5)} />
         <Meter title={lang === "zh" ? "已记录步骤" : "Recorded steps"} jev={jev ? jev.steps.length : null} baseline={base ? base.steps.length : null} format={(n) => n == null ? "—" : String(n)} label={decisionLabel} />
         <div className="telemetry-label">JEVLOOP / {lang === "zh" ? "路由与缓存" : "ROUTING & CACHE"}</div>
         <Telemetry state={jev} decisionLabel={decisionLabel} />

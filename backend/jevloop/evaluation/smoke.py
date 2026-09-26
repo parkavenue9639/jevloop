@@ -1,7 +1,13 @@
 """Deterministic end-to-end smoke for the kernel and Docker sandbox."""
 
 import asyncio
+import base64
+import io
 import json
+import os
+import tempfile
+
+from PIL import Image
 
 from jevloop.context.projection import rebuild_workspace
 from jevloop.context.state import Workspace
@@ -12,6 +18,7 @@ from jevloop.contracts.tools import ToolContext
 from jevloop.decision.argument_helper import generate_arguments
 from jevloop.decision.drivers import DriverProposal
 from jevloop.runtime.kernel import RuntimeKernel
+from jevloop.storage import assets
 from jevloop.tools.sandbox import DockerSandboxContainer, DockerSandboxImage, SandboxTools
 
 
@@ -147,6 +154,7 @@ async def run_smoke():
         )
         canonical_checks = await check_canonical_tools(container)
         argument_checks = await check_argument_routes(container)
+        image_checks = await check_image_capture(container)
         return {
             "ok": True,
             "image_id": image.image_id,
@@ -157,11 +165,64 @@ async def run_smoke():
             "checkpoints": len(checkpoints),
             "canonical_checks": canonical_checks,
             "argument_checks": argument_checks,
+            "image_checks": image_checks,
         }
     finally:
         if container is not None:
             await container.close()
         await image.close()
+
+
+async def check_image_capture(container):
+    """Real Docker binary capture/restore with offline mock visual understanding.
+
+    This validates the visual callback boundary, never a live model's accuracy.
+    """
+    data = io.BytesIO()
+    Image.new("RGB", (24, 16), "red").save(data, format="PNG")
+    encoded = base64.b64encode(data.getvalue()).decode("ascii")
+    # This fixture lives only in the smoke-owned disposable sandbox volume.
+    result = await container.run_bash(
+        "python -c \"import base64; from pathlib import Path; "
+        f"Path('capture.png').write_bytes(base64.b64decode('{encoded}'))\"")
+    assert result["exit"] == 0, result
+    previous = os.environ.get("JEVLOOP_ASSETS_DIR")
+    try:
+        with tempfile.TemporaryDirectory(prefix="jevloop-image-smoke-") as directory:
+            os.environ["JEVLOOP_ASSETS_DIR"] = directory
+            provider, workspace = SandboxTools(container), Workspace()
+            visual_calls = []
+            mock_observation = "Offline mock visual observation: a red rectangular image fixture."
+
+            async def visual_read(part):
+                visual_calls.append(dict(part))
+                assert assets.resolve_image(part) == part
+                return mock_observation
+
+            outcome = await provider.execute("VIEW_IMAGE", ToolContext(
+                workspace=workspace, arguments={"source": "capture.png"}, visual_read=visual_read))
+            assert outcome["status"] == "ready", outcome
+            part = outcome["images"][0]
+            assert visual_calls == [part]
+            assert mock_observation in outcome["observation"]["evidence"]
+            assert (part["width"], part["height"]) == (24, 16)
+            captured, _ = assets.read_image(part["asset_id"])
+            await container.write_file("capture.png", "changed after capture")
+            assert assets.read_image(part["asset_id"])[0] == captured
+            ledger = Transcript("system", "inspect")
+            call = ledger.append_action("VIEW_IMAGE", {"source": "capture.png"})
+            ledger.append_result(call, outcome)
+            restored = Transcript.from_messages(ledger.dump())
+            assert restored.images() == [part]
+            assert rebuild_workspace(restored).images == {part["asset_id"]: part}
+            assert "data:image" not in json.dumps(ledger.dump())
+            return ["docker_binary_capture", "offline_mock_visual_observation",
+                    "immutable_after_source_change", "image_restore"]
+    finally:
+        if previous is None:
+            os.environ.pop("JEVLOOP_ASSETS_DIR", None)
+        else:
+            os.environ["JEVLOOP_ASSETS_DIR"] = previous
 
 
 async def check_argument_routes(container):

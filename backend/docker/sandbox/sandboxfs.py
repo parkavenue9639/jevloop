@@ -7,17 +7,20 @@ lexically (no absolute paths, no parent hops) and by resolving symlinks —
 so nothing outside the workspace can be named or reached.
 """
 
+import base64
 import fnmatch
 import json
 import os
 import re
 import signal
+import stat
 import sys
 from pathlib import Path
 
 WORKSPACE = Path("/workspace")
 MAX_LIST = 200            # entries surfaced to the agent
 MAX_READ_BYTES = 1_000_000  # hard byte cap on a file pulled out of the container
+MAX_IMAGE_BYTES = 10 * 1024 * 1024
 MAX_SCAN_ENTRIES = 2000
 MAX_SEARCH_FILES = 200
 MAX_SEARCH_BYTES = 2_000_000
@@ -145,6 +148,41 @@ def read_range(name, offset=0, limit=200):
             "next_offset": offset + len(lines) if truncated and lines and not line_truncated else None}
 
 
+def read_image(name):
+    """Capture bounded binary bytes through directory FDs; never follow symlinks.
+
+    Resolving a pathname and then opening it permits rename/symlink races with
+    sandbox processes. Walk from an already-open workspace instead.
+    """
+    if (not isinstance(name, str) or not name or len(name) > 512
+            or name.startswith("/") or "\\" in name or ".." in name.split("/")
+            or any(ord(c) < 32 for c in name)):
+        raise ValueError("invalid or escaping sandbox image path")
+    parts = [part for part in name.split("/") if part not in {"", "."}]
+    if not parts:
+        raise ValueError("image source must be a file")
+    fd = os.open(WORKSPACE, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        for part in parts[:-1]:
+            next_fd = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+            os.close(fd)
+            fd = next_fd
+        file_fd = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
+        with os.fdopen(file_fd, "rb") as handle:
+            info = os.fstat(handle.fileno())
+            if not stat.S_ISREG(info.st_mode) or not 0 < info.st_size <= MAX_IMAGE_BYTES:
+                raise ValueError("image source is not a regular file within the 10 MiB budget")
+            data = handle.read(MAX_IMAGE_BYTES + 1)
+            after = os.fstat(handle.fileno())
+            if (len(data) > MAX_IMAGE_BYTES or len(data) != info.st_size
+                    or (info.st_mtime_ns, info.st_ctime_ns) != (after.st_mtime_ns, after.st_ctime_ns)):
+                raise ValueError("image source exceeded budget or changed during capture")
+    finally:
+        os.close(fd)
+    return {"status": "ready", "path": "/".join(parts), "size_bytes": len(data),
+            "data": base64.b64encode(data).decode("ascii")}
+
+
 class SearchTimeout(Exception):
     pass
 
@@ -249,7 +287,7 @@ def structured(command, payload):
         args = json.loads(payload)
         if not isinstance(args, dict):
             raise TypeError("arguments must be an object")
-        result = {"list-page": list_entries, "read-range": read_range,
+        result = {"list-page": list_entries, "read-range": read_range, "read-image": read_image,
                   "search": search_files}[command](**args)
     except (OSError, ValueError, TypeError) as error:
         result = {"status": "error", "error": type(error).__name__,
@@ -260,7 +298,7 @@ def structured(command, payload):
 
 def main(argv: list[str]) -> int:
     command = argv[1] if len(argv) > 1 else ""
-    if command in {"list-page", "read-range", "search"}:
+    if command in {"list-page", "read-range", "read-image", "search"}:
         return structured(command, argv[2] if len(argv) > 2 else "{}")
     if command == "list":
         return list_files()

@@ -38,11 +38,17 @@ export function liveDecision(frame: DecisionFrame, zh: boolean, provider: Decisi
     lines.push(zh ? `${name} 已返回${selected ? `：${selected}` : ""}` : `${name} returned${selected ? `: ${selected}` : ""}`);
   }
   if (frame.llm) {
-    const kind = frame.llm.kind === "arbitration" ? (zh ? "LLM 复核" : "LLM review") : frame.llm.kind === "parameter_authoring" ? (zh ? "LLM 补参" : "LLM parameters") : (zh ? "LLM 撰写" : "LLM authoring");
+    const kind = frame.llm.kind === "visual_decision" ? (zh ? "视觉 LLM 决策（会话含图片证据）" : "Vision LLM decision (session contains image evidence)") : frame.llm.kind === "arbitration" ? (zh ? "LLM 复核" : "LLM review") : frame.llm.kind === "parameter_authoring" ? (zh ? "LLM 补参" : "LLM parameters") : (zh ? "LLM 撰写" : "LLM authoring");
     const status = frame.llm.status === "running" ? (zh ? "已开始" : "started") : frame.llm.status === "failed" ? (zh ? "失败" : "failed") : (zh ? "已返回，尚不代表已提交" : "returned; not yet a commit");
-    lines.push(`${kind} · ${frame.llm.operation} · ${status}`);
+    lines.push([kind, frame.llm.operation, status].filter(Boolean).join(" · "));
   }
   if (frame.committed) lines.push(zh ? "调用已提交至 transcript，执行结果另行记录" : "Call committed to transcript; execution result recorded separately");
+  if (frame.visualRead) {
+    const status = frame.visualRead.status === "running" ? (zh ? "正在结合任务上下文读图" : "Reading image with task context")
+      : frame.visualRead.status === "failed" ? (zh ? "读图失败" : "Image read failed")
+        : (zh ? "视觉观察已返回，等待工具结果记录" : "Visual observation returned; awaiting recorded tool result");
+    lines.push(`${frame.visualRead.operation ?? "VIEW_IMAGE"} · ${status}`);
+  }
   return lines;
 }
 
@@ -50,7 +56,7 @@ export function liveDecision(frame: DecisionFrame, zh: boolean, provider: Decisi
 export function observedRoute(frame: DecisionFrame) {
   const assisted = !!(frame.llm || frame.needsAuthoring || frame.escalated || frame.finalBinding === "arbitrated");
   const direct = !!frame.finalOperation && frame.escalated === false && frame.needsAuthoring === false
-    && !frame.llm && typeof frame.finalBinding === "string" && frame.finalBinding !== "arbitrated";
+    && !frame.llm && !frame.visualRead && typeof frame.finalBinding === "string" && frame.finalBinding !== "arbitrated";
   return { assisted, direct };
 }
 
@@ -62,7 +68,8 @@ export function candidateView(step: Step | undefined, frame?: DecisionFrame) {
   const recorded = record(step?.decision);
   const hasDecisionEvidence = recorded.confidence != null || recorded.latency_ms != null
     || recorded.consumed_heads != null || recorded.phase_probabilities != null;
-  const fallback = hasDecisionEvidence && !step?.escalation && !step?.decision.escalated ? recorded : {};
+  const visual = step?.decision.decision_source === "visual_llm" || step?.model_calls?.some((item) => item.kind === "visual_decision");
+  const fallback = hasDecisionEvidence && !visual && !step?.escalation && !step?.decision.escalated ? recorded : {};
   const response = frame ? record(frame.response) : Object.keys(original).length ? original : fallback;
   const request = frame ? { questions: frame.questions } : record(call?.request ?? step?.request);
   const questions = record(request.questions);

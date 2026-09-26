@@ -18,7 +18,7 @@ const nodes: { id: LoopNode; x: number; y: number; en: string; zh: string; hint:
 const Circuit = memo(function Circuit({ view, baseline, id, model }: { view: View; baseline: boolean; id: string; model: DecisionProvider }) {
   const { lang } = useLang();
   const name = modelName(model);
-  const nodeName = (key: LoopNode) => baseline && key === "decision" ? (lang === "zh" ? "LLM 决策" : "LLM decision") : key === "decision" ? (lang === "zh" ? `${name} 决策路由` : `${name}-led routing`) : nodes.find((node) => node.id === key)?.[lang];
+  const nodeName = (key: LoopNode) => view.visual && key === "decision" ? (lang === "zh" ? "视觉 LLM 决策" : "Vision LLM decision") : baseline && key === "decision" ? (lang === "zh" ? "LLM 决策" : "LLM decision") : key === "decision" ? (lang === "zh" ? `${name} 决策路由` : `${name}-led routing`) : nodes.find((node) => node.id === key)?.[lang];
   const edges: { from: LoopNode; to: LoopNode; d: string }[] = [
     { from: "state", to: "decision", d: "M230 74 V110" },
     ...(baseline ? [{ from: "decision" as const, to: "kernel" as const, d: "M230 168 V310" }] : [
@@ -56,7 +56,7 @@ const Circuit = memo(function Circuit({ view, baseline, id, model }: { view: Vie
       const recorded = view.route.includes(node.id);
       const isDecision = node.id === "decision";
       const tone = baseline && isDecision ? "llm" : node.tone;
-      const title = baseline && isDecision ? (lang === "zh" ? "LLM 决策" : "LLM decision") : isDecision ? (lang === "zh" ? `${name} 决策路由` : `${name}-led routing`) : node[lang];
+      const title = nodeName(node.id);
       return <g key={node.id} transform={`translate(${node.x - 82} ${node.y - 29})`}
         className={`circuit-node tone-${tone} ${active ? "is-active" : ""} ${recorded ? "is-recorded" : ""} ${node.id === "kernel" && view.blocked ? "is-blocked" : ""}`}>
         <rect className="node-glow" x="-3" y="-3" width="170" height="64" rx="8" />
@@ -70,7 +70,7 @@ const Circuit = memo(function Circuit({ view, baseline, id, model }: { view: Vie
     })}
   </svg>;
 }, (a, b) => a.baseline === b.baseline && a.id === b.id && a.model === b.model
-  && a.view.status === b.view.status && a.view.active === b.view.active
+  && a.view.status === b.view.status && a.view.active === b.view.active && a.view.visual === b.view.visual
   && a.view.blocked === b.view.blocked && a.view.route.join() === b.view.route.join());
 
 function LoopDiagramView({ state, baseline = false, live, connected, done, error, step, sceneKey = "default", model = "jev" }: {
@@ -94,7 +94,9 @@ function LoopDiagramView({ state, baseline = false, live, connected, done, error
       <div><span className="eyebrow">{baseline ? "LLM ONLY" : `${name.toUpperCase()} + LLM`}</span><h3>{baseline ? (lang === "zh" ? "基线循环" : "Baseline loop") : `${name}Loop`}</h3></div>
       <span className={`console-status status-${view.status}`}><i />{statuses[view.status][lang === "zh" ? 1 : 0]}</span>
     </div>
-    {baseline ? <Circuit view={view} baseline={baseline} id={id} model={model} /> : <DecisionFlow sceneKey={sceneKey} view={view}
+    {view.visual && <p className="topology-note" data-testid="visual-delegation">{lang === "zh" ? "旧路由记录：该步骤由视觉 LLM 直接决策并生成工具参数。" : "Legacy route record: vision LLM decided and generated tool arguments for this step."}</p>}
+    {baseline && view.visualRead && <p className="topology-note" data-testid="visual-read">{lang === "zh" ? "VIEW_IMAGE 工具执行期间结合任务上下文读图。" : "VIEW_IMAGE reads the image with task context during tool execution."}</p>}
+    {baseline || view.visual ? <Circuit view={view} baseline id={id} model={model} /> : <DecisionFlow sceneKey={sceneKey} view={view}
       frame={frame} step={view.step} model={model} />}
     <div className="lane-footnote"><span className="signal-dot" />{frame ? frameOperation ?? (lang === "zh" ? "本轮等待选择" : "Awaiting this attempt’s choice") : view.step?.decision.operation ?? (lang === "zh" ? "等待首个决策" : "Awaiting first decision")}</div>
   </section>;

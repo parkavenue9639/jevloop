@@ -54,6 +54,12 @@ def client() -> httpx.AsyncClient:
 
 async def post_json(url, key, body):
     headers = {"Authorization": f"Bearer {key}"} if key else {}
+    visual = any(
+        isinstance(message.get("content"), list)
+        and any(part.get("type") == "image_url" for part in message["content"]
+                if isinstance(part, dict))
+        for message in body.get("messages", []) if isinstance(message, dict)
+    )
     for attempt in range(3):
         try:
             response = await client().post(url, json=body, headers=headers)
@@ -63,9 +69,12 @@ async def post_json(url, key, body):
             await asyncio.sleep(0.5 * 2**attempt)
             continue
         if response.is_error:
+            # Vision providers can echo input pixels in validation errors. Never
+            # let that body reach the durable failure/transcript/event boundary.
+            diagnostic = "Image request rejected; response body withheld." if visual else f"Body: {response.text[:300]}"
             raise ModelUnavailable(
                 f"Model provider returned HTTP {response.status_code}; no action executed. "
-                f"Body: {response.text[:300]}"
+                f"{diagnostic}"
             )
         return response.json()
     raise ModelUnavailable("Model unavailable")

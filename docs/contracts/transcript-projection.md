@@ -5,6 +5,13 @@ durable transcript with the LLM-visible message list, including the original
 architecture and observation-view storage/budget rules. Stable tool schemas and
 complete-arguments-or-LLM_PARAMETERS routing remain unchanged.
 
+The [multimodal extension](multimodal-evidence.md) adds explicit typed image
+references to logical projections. Projection remains pure: only the shared
+LLM transport resolves explicitly selected assets into native image blocks for
+`VIEW_IMAGE` perception. Its wire-only image messages do not become durable user
+turns. Ordinary helpers receive metadata and prior visual observations, not
+implicit pixels. Model interpretations never replace retained source images.
+
 ## Boundaries
 
 1. **One durable source.** Transcript records contain user/assistant messages,

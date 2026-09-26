@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useDecisionChoice } from "../decisionChoice";
-import type { RunParams } from "../types";
-import { useT } from "../i18n";
+import type { ImagePart, RunParams } from "../types";
+import { useLang, useT } from "../i18n";
 import { Icon } from "./Icon";
+import { IMAGE_ACCEPT, MAX_IMAGES, uploadImage } from "../media";
+import { ImageAttachments } from "./ImageAttachments";
+
+type DraftImage = { id: number; name: string; controller: AbortController; image?: ImagePart; error?: string };
 
 const field =
   "w-full resize-y rounded-xl bg-transparent px-1.5 py-1 text-sm text-ink outline-none placeholder:text-ink2";
@@ -25,14 +29,59 @@ const num = (raw: string): number | null => {
  *  prominent compare-run checkbox and a settings popover carrying the run
  *  parameters that used to live in the sidebar form. Disabled while a run is
  *  live; field values persist across turns. */
-export function ChatInput({ disabled, starting, error, onSend }: {
+export function ChatInput({ disabled, starting, error, scope = 0, onSend }: {
   disabled: boolean;
   starting: boolean;
   error: string | null;
+  scope?: number;
   onSend: (params: RunParams) => void;
 }) {
   const t = useT();
+  const { lang } = useLang();
   const [goal, setGoal] = useState("");
+  const [attachments, setAttachments] = useState<DraftImage[]>([]);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const draftRef = useRef<DraftImage[]>([]);
+  const sequence = useRef(0);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const changeAttachments = (next: DraftImage[]) => { draftRef.current = next; setAttachments(next); };
+  // Session changes and replay invalidate every pending upload. Abort plus
+  // identity checks also cover transports that finish after cancellation.
+  useEffect(() => {
+    setGoal(""); setUploadError(null);
+    draftRef.current.forEach((item) => item.controller.abort());
+    draftRef.current = []; setAttachments([]);
+    return () => {
+      draftRef.current.forEach((item) => item.controller.abort());
+      draftRef.current = [];
+    };
+  }, [scope]);
+
+  const removeAttachment = (id: number) => {
+    draftRef.current.find((item) => item.id === id)?.controller.abort();
+    changeAttachments(draftRef.current.filter((item) => item.id !== id));
+  };
+  const attach = (files: File[]) => {
+    if (disabled || starting) return;
+    setUploadError(null);
+    if (draftRef.current.length + files.length > MAX_IMAGES) {
+      setUploadError(lang === "zh" ? "每次最多添加 8 张图片。" : "Attach at most 8 images per turn.");
+      return;
+    }
+    const added = files.map((file) => ({ id: ++sequence.current, name: file.name, controller: new AbortController() }));
+    changeAttachments([...draftRef.current, ...added]);
+    added.forEach((item, index) => {
+      void uploadImage(files[index], item.controller.signal).then((image) => {
+        if (!item.controller.signal.aborted && draftRef.current.some((row) => row.id === item.id)) {
+          changeAttachments(draftRef.current.map((row) => row.id === item.id ? { ...row, image } : row));
+        }
+      }).catch((error: unknown) => {
+        if (!item.controller.signal.aborted && draftRef.current.some((row) => row.id === item.id)) {
+          changeAttachments(draftRef.current.map((row) => row.id === item.id ? { ...row, error: String(error) } : row));
+        }
+      });
+    });
+  };
   const { provider, setProvider: chooseProvider } = useDecisionChoice();
   const [compare, setCompare] = useState(false);
   const [live, setLive] = useState(false);
@@ -71,12 +120,15 @@ export function ChatInput({ disabled, starting, error, onSend }: {
     };
   }, [settingsOpen]);
 
-  const canSend = !disabled && !starting && !!goal.trim();
+  const uploading = attachments.some((item) => !item.image && !item.error);
+  const canSend = !disabled && !starting && !uploading && !attachments.some((item) => item.error)
+    && (!!goal.trim() || attachments.some((item) => item.image));
 
   const send = () => {
-    if (!canSend) return;
+    if (!canSend || draftRef.current.some((item) => !item.image)) return;
     onSend({
       goal: goal.trim(),
+      images: draftRef.current.flatMap((item) => item.image ? [item.image] : []),
       profile: compare ? "paired_shadow" : live ? "single_live" : "single_shadow",
       step_pause: stepPause,
       escalate_threshold: threshold ?? 0.5,
@@ -90,6 +142,7 @@ export function ChatInput({ disabled, starting, error, onSend }: {
       decision_provider: provider,
     });
     setGoal(""); // the pending-goal echo takes over in the transcript
+    changeAttachments([]);
   };
 
   const onKeyDown = (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
@@ -108,6 +161,14 @@ export function ChatInput({ disabled, starting, error, onSend }: {
     <form onSubmit={onSubmit} className="chat-composer shrink-0 border-t border-line bg-surface">
       <div className="composer-inner mx-auto px-4 py-3">
         {error && <p className="mb-2 text-xs text-critical">{error}</p>}
+        {uploadError && <p role="alert" className="mb-2 text-xs text-critical">{uploadError}</p>}
+        {!!attachments.length && <div className="mb-2 flex flex-wrap gap-3" aria-live="polite">
+          {attachments.map((item) => <div key={item.id} className="max-w-48 text-xs">
+            {item.image ? <ImageAttachments images={[item.image]} /> : <p className="break-words">{item.name} · {item.error ? (lang === "zh" ? "上传失败" : "Upload failed") : (lang === "zh" ? "上传中…" : "Uploading…")}</p>}
+            {item.error && <p role="alert" className="text-critical">{item.error}</p>}
+            <button type="button" disabled={disabled || starting} className="console-text-button" onClick={() => removeAttachment(item.id)} aria-label={`${lang === "zh" ? "移除" : "Remove"} ${item.name}`}>{lang === "zh" ? "移除" : "Remove"}</button>
+          </div>)}
+        </div>}
         {provider === "laya" && (
           <p className="mb-2 text-xs text-ink2" data-testid="decision-laya-note">{t("decisionLayaNote")}</p>
         )}
@@ -246,6 +307,12 @@ export function ChatInput({ disabled, starting, error, onSend }: {
         </div>
 
         <div className="soft-lift flex items-end gap-2 rounded-2xl border border-line bg-surface2 px-3 py-2.5">
+          <input ref={fileRef} data-testid="image-input" type="file" accept={IMAGE_ACCEPT} multiple className="hidden" disabled={disabled || starting || attachments.length >= MAX_IMAGES}
+            onChange={(event) => { attach(Array.from(event.target.files ?? [])); event.target.value = ""; }} />
+          <button type="button" className="console-button shrink-0" disabled={disabled || starting || attachments.length >= MAX_IMAGES}
+            onClick={() => fileRef.current?.click()} title={lang === "zh" ? "PNG / JPEG / WebP / 静态 GIF，每张 ≤10 MiB，最多 8 张" : "PNG / JPEG / WebP / non-animated GIF, ≤10 MiB each, up to 8 images"}>
+            <Icon name="plus" /><span>{lang === "zh" ? "图片" : "Image"}</span>
+          </button>
           <textarea
             data-testid="chat-input"
             aria-label={t("chatPlaceholder")}

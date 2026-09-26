@@ -15,12 +15,13 @@ of Jev's confidence.
 """
 
 import json
-import os
 
+from jevloop.context.transcript import Transcript
 from jevloop.contracts.arguments import argument_target, argument_text, arguments_complete, validate_arguments
 from jevloop.contracts.authored import validate_authored_value
 from jevloop.contracts.policy import InvalidProposal, MalformedAuthoredValue
 from jevloop.contracts.schemas import tool_schemas
+from jevloop.decision.llm_transport import prepare_request
 from jevloop.decision.model import post_json
 
 
@@ -123,19 +124,14 @@ async def arbitrate(transcript, jev_decision, provider, valid_actions, post=None
     import time
 
     started = time.perf_counter()
-    base = os.environ.get("TEXT_MODEL_BASE_URL", "https://api.deepseek.com/v1").rstrip("/")
-    key = os.environ.get("DEEPSEEK_API_KEY") or ""
-    request = {
-        "model": os.environ.get("TEXT_MODEL", "deepseek-chat"),
-        "max_tokens": 8192,
-        "messages": [*transcript.llm_messages(), {"role": "user", "content": note}],
-        "tools": _scoped_tool_schemas(provider, jev_decision, valid_actions),
-        "tool_choice": "auto",
-        "parallel_tool_calls": False,
-    }
+    projected = Transcript.from_messages(transcript.dump())
+    projected.append_note(note)
+    llm_target, request, logged = prepare_request(
+        projected, tools=_scoped_tool_schemas(provider, jev_decision, valid_actions),
+        tool_choice="auto", parallel_tool_calls=False)
     result = await (post or post_json)(
-        base + "/chat/completions",
-        key,
+        llm_target.url,
+        llm_target.key,
         request,
     )
     message = result["choices"][0]["message"]
@@ -145,7 +141,8 @@ async def arbitrate(transcript, jev_decision, provider, valid_actions, post=None
         "note": note,
         "usage": usage,
         "latency_ms": round((time.perf_counter() - started) * 1000),
-        "request": request,
+        "request": logged,
+        "visual": llm_target.visual,
         "response": message,
     }
     if (result["choices"][0] or {}).get("finish_reason") == "length":

@@ -16,6 +16,7 @@ from copy import deepcopy
 
 from jevloop.context.observations import normalize_observation, update_views
 from jevloop.context.state import PRIOR_ANSWER_EXCERPT_CHARS, ChatRef, DocRef, Workspace
+from jevloop.contracts.media import image_parts, record_images
 
 _EXEC_KEYS = {
     "status", "action", "created", "exit", "output", "dry_run", "reason",
@@ -105,6 +106,8 @@ def _enrich(operation, outcome, workspace):
     result = {k: v for k, v in outcome.items() if k in _EXEC_KEYS}
     if outcome.get("status") not in {"ready", "done"}:
         return result
+    if outcome.get("images"):
+        result["images"] = image_parts(outcome["images"])
     if operation in {"LIST_CHATS", "SEARCH_CHATS"}:
         result["chats"] = [
             {"id": key, "name": ref.name, "p2p": ref.p2p, "via_user_id": ref.via_user_id}
@@ -177,6 +180,8 @@ def record_execution(transcript, operation, arguments, outcome, workspace,
     # Live and restored Jev views consume the same durable observation facts.
     view = _observation_from_record(result, operation, call_id, arguments)
     transcript.append_result(call_id, result)
+    for part in record_images({"role": "tool", "content": result}):
+        workspace.remember_image(part)
     if view is not None:
         _apply_observation(workspace, view)
     return call_id
@@ -241,6 +246,8 @@ def rebuild_workspace(transcript) -> Workspace:
     workspace = Workspace()
     messages = transcript.dump()
     for index, message in enumerate(messages):
+        for part in record_images(message):
+            workspace.remember_image(part)
         if message.get("role") != "assistant":
             if message.get("role") == "user" and isinstance(message.get("_runtime_note"), dict):
                 workspace.append_history(_history_from_runtime_note(message["_runtime_note"]))

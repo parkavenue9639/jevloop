@@ -6,6 +6,9 @@ export interface Escalation {
 
 export interface Decision {
   operation: string;
+  binding_mode?: string;
+  decision_source?: string;
+  delegation_reason?: string;
   escalated?: boolean;
   phase?: "INSPECT" | "ACT" | "VERIFY" | "RESPOND" | string | null;
   phase_confidence?: number | null;
@@ -22,7 +25,19 @@ export interface Decision {
   usage?: { input_tokens?: number; output_tokens?: number };
 }
 
+export interface ImagePart {
+  type: "image";
+  asset_id: string;
+  mime_type: string;
+  width: number;
+  height: number;
+  detail: "auto" | "high";
+  name: string;
+}
+
 export interface Outcome {
+  images?: ImagePart[];
+  observation?: { evidence?: string };
   status: string;
   action?: string;
   dry_run?: boolean;
@@ -57,6 +72,7 @@ export interface Step {
 
 export interface Metrics {
   elapsed_ms: number;
+  cost_complete?: boolean;
   jev: {
     calls: number;
     median_ms: number | null;
@@ -68,6 +84,8 @@ export interface Metrics {
   };
   helper: {
     calls: number;
+    cost_complete?: boolean;
+    unpriced_calls?: number;
     median_ms: number | null;
     total_ms: number;
     input_tokens: number;
@@ -95,6 +113,7 @@ export interface Metrics {
     llm_assisted_jev_steps: number;
     llm_avoidance_rate: number | null;
     plain_steps: number;
+    visual_steps?: number;
   };
   est_cost_usd: number;
   pricing?: {
@@ -170,8 +189,8 @@ export type RunEvent =
   | { type: "attempt_started"; lane?: Lane; attempt_id: string; step: number }
   | { type: "jev_request"; lane?: Lane; attempt_id: string; questions: Record<string, unknown> }
   | { type: "jev_response"; lane?: Lane; attempt_id: string; response: Record<string, unknown> }
-  | { type: "llm_started"; lane?: Lane; attempt_id: string; kind: string; operation: string; reason?: string }
-  | { type: "llm_completed"; lane?: Lane; attempt_id: string; kind: string; operation: string; reason?: string; status: "returned" | "failed" }
+  | { type: "llm_started"; lane?: Lane; attempt_id: string; intent_id?: string; kind: string; operation: string | null; reason?: string }
+  | { type: "llm_completed"; lane?: Lane; attempt_id: string; intent_id?: string; kind: string; operation: string | null; reason?: string; status: "returned" | "failed" }
   | { type: "decision_ready"; lane?: Lane; attempt_id: string; operation: string; needs_authoring: boolean; binding_mode?: string | null; escalated?: boolean }
   | { type: "intent"; lane?: Lane; operation: string; target?: string | null }
   | { type: "dispatch_started"; lane?: Lane; operation: string }
@@ -198,7 +217,9 @@ export interface LaneState {
 }
 
 export interface DecisionFrame {
-  llm?: { kind: string; operation: string; reason?: string; status: "running" | "returned" | "failed" };
+  llm?: { kind: string; operation: string | null; reason?: string; status: "running" | "returned" | "failed" };
+  /** Model inference inside tool execution, separate from decision/authoring. */
+  visualRead?: { operation: string | null; intentId?: string; reason?: string; status: "running" | "returned" | "failed" };
   committed?: boolean;
   attemptId: string;
   step: number;
@@ -212,6 +233,7 @@ export interface DecisionFrame {
 
 export interface RunParams {
   goal: string;
+  images?: ImagePart[];
   session_id?: string;
   profile: RunProfile;
   step_pause: boolean;

@@ -2,6 +2,8 @@ import { ProbBars } from "./ProbBars";
 import { Badge, TurnContent } from "./TurnContent";
 import type { Lane, Step } from "../types";
 import { useT } from "../i18n";
+import { imageParts } from "../media";
+import { ImageAttachments } from "./ImageAttachments";
 
 function fmtTokens(n?: number): string {
   if (!n) return "0";
@@ -52,6 +54,8 @@ export function ActivityRow({ index, step, lane, compact = false, modelLabel = "
     }))
     : [];
   const modelCalls = step.model_calls ?? [];
+  const visual = d.decision_source === "visual_llm" || modelCalls.some((call) => call.kind === "visual_decision");
+  const visualRead = modelCalls.some((call) => call.kind === "visual_read");
 
   const row = (
     <>
@@ -60,6 +64,8 @@ export function ActivityRow({ index, step, lane, compact = false, modelLabel = "
         {d.operation === "LLM_TURN" ? "🤖" : OP_ICONS[d.operation] ?? "⚡"}
       </span>
       <Badge tone="accent">{operationLabel}</Badge>
+      {visual && <Badge tone="neutral">{t("modelCallKind_visual_decision")}</Badge>}
+      {visualRead && <Badge tone="neutral">{t("modelCallKind_visual_read")}</Badge>}
       {d.target_label ? (
         <span className={`max-w-40 truncate text-ink ${compact ? "max-w-32" : ""}`} title={d.target_label}>
           → {d.target_label}
@@ -84,8 +90,8 @@ export function ActivityRow({ index, step, lane, compact = false, modelLabel = "
       )}
       <span className="ml-auto flex items-center gap-2 text-ink2">
         {d.latency_ms != null && (
-          <span className="num" title={t("jevDecisionTime", { model: modelLabel })}>
-            {lane === "jev" ? modelLabel : "LLM"} {fmtMs(d.latency_ms)}
+          <span className="num" title={t("jevDecisionTime", { model: visual ? "LLM" : modelLabel })}>
+            {lane === "jev" && !visual ? modelLabel : "LLM"} {fmtMs(d.latency_ms)}
           </span>
         )}
         {step.outcome?.helper?.latency_ms != null && (
@@ -255,6 +261,11 @@ export function ActivityRow({ index, step, lane, compact = false, modelLabel = "
       {(step.outcome?.text ?? step.outcome?.answer) && (
         <TurnContent op={d.operation} text={(step.outcome?.text ?? step.outcome?.answer)!} />
       )}
+      {!!step.outcome?.images?.length && <div className="border-t border-line px-3"><ImageAttachments images={imageParts(step.outcome.images)} /></div>}
+      {d.operation === "VIEW_IMAGE" && typeof step.outcome?.observation?.evidence === "string" && <div data-testid="visual-observation">
+        <div className="px-3 pt-2 text-[11px] text-ink2">{t("visualObservation")}</div>
+        <TurnContent op="VIEW_IMAGE" text={step.outcome.observation.evidence} />
+      </div>}
       {esc && (
         <div
           data-testid="escalation-banner"
@@ -305,6 +316,7 @@ const OP_LABEL_KEYS: Record<string, string> = {
   REPLY_MESSAGE: "operation_REPLY_MESSAGE",
   WRITE_FILE: "operation_WRITE_FILE",
   READ_FILE: "operation_READ_FILE",
+  VIEW_IMAGE: "operation_VIEW_IMAGE",
   LIST_FILES: "operation_LIST_FILES",
   BASH: "operation_BASH",
   ANSWER: "operation_ANSWER",

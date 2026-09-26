@@ -5,6 +5,7 @@ during frontend development use the Vite dev server, which proxies /api here.
 """
 
 import asyncio
+import base64
 import hashlib
 import json
 import queue
@@ -16,13 +17,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
 from jevloop.config import DEFAULT_AMBIGUITY_GATE, DEFAULT_ANSWER_PROGRESS_FLOOR, DEFAULT_ESCALATE_THRESHOLD
+from jevloop.contracts.media import image_parts
 from jevloop.contracts.policy import WritePolicy
 from jevloop.decision.drivers import JevDriver, PlainLlmDriver
 from jevloop.decision.laya import normalize_decision_provider
 from jevloop.paths import REPO_ROOT
 from jevloop.runtime.kernel import RuntimeKernel
 from jevloop.runtime.metrics import RunMetrics
-from jevloop.storage import runstore, sessions
+from jevloop.storage import assets, runstore, sessions
 from jevloop.tools.sandbox import DockerSandboxContainer, DockerSandboxImage, SandboxTools
 
 WEB_DIST = REPO_ROOT / "frontend" / "dist"
@@ -125,11 +127,20 @@ class Dashboard:
         return self.image
 
     def start_run(self, params):
+        images = [assets.resolve_image(part) for part in image_parts(params.get("images", []))]
+        if sum(assets.image_size(part) for part in images) > assets.MAX_REQUEST_IMAGE_BYTES:
+            raise ValueError("Image attachments exceed the aggregate byte budget.")
+        params = {**params, "images": images}
+        if not str(params.get("goal", "")).strip():
+            if not images:
+                raise ValueError("goal or image attachments are required")
+            params["goal"] = "Describe the attached image(s)."
         profile = params.get("profile")
         if profile not in RUN_PROFILES:
             raise ValueError(f"profile must be one of {sorted(RUN_PROFILES)}")
         run_id = uuid.uuid4().hex[:12]
         session_id = params.get("session_id") or sessions.new_session_id()
+        runstore.validate_session_id(session_id)
         paired = profile == "paired_shadow"
         cache_policy = CACHE_POLICY_ISOLATED if paired else CACHE_POLICY_NATURAL
         cache_scopes = (
@@ -306,7 +317,7 @@ class Dashboard:
             return "continue"
 
         try:
-            async for step in kernel.run(params["goal"], before_step=before_step):
+            async for step in kernel.run(params["goal"], before_step=before_step, images=params.get("images")):
                 state.emit({"type": "step", "lane": lane, "step": step})
                 state.emit({"type": "metrics", "lane": lane, "metrics": metrics.summary()})
                 if step.get("final"):
@@ -367,17 +378,24 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _body(self):
+    def _body(self, max_bytes=1024 * 1024):
         length = int(self.headers.get("Content-Length", 0))
+        if not 0 <= length <= max_bytes:
+            self.close_connection = True
+            raise ValueError("Request body exceeds the allowed size.")
         return json.loads(self.rfile.read(length)) if length else {}
 
     # -- routes -------------------------------------------------------------
     def do_POST(self):
         try:
+            if self.path == "/api/assets":
+                payload = self._body(max_bytes=(assets.MAX_IMAGE_BYTES * 4 // 3) + 4096)
+                if not isinstance(payload, dict) or set(payload) != {"name", "data"}:
+                    raise ValueError("Expected image name and base64 data.")
+                data = base64.b64decode(payload["data"], validate=True)
+                return self._json({"image": assets.ingest_image(data, name=payload["name"])})
             if self.path == "/api/run":
                 params = self._body()
-                if not str(params.get("goal", "")).strip():
-                    return self._json({"error": "goal is required"}, 400)
                 return self._json(DASHBOARD.start_run(params))
             parts = self.path.strip("/").split("/")
             if len(parts) == 3 and parts[0] == "api" and parts[1] == "run":
@@ -390,6 +408,19 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         parts = self.path.strip("/").split("/")
         url = urlsplit(self.path)
+        if url.path.startswith("/api/assets/"):
+            try:
+                data, mime = assets.read_image(url.path.removeprefix("/api/assets/"))
+            except (ValueError, OSError):
+                return self._json({"error": "Image asset is missing or unavailable."}, 404)
+            self.send_response(200)
+            self.send_header("Content-Type", mime)
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "private, max-age=31536000, immutable")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            self.wfile.write(data)
+            return
         if url.path == "/api/config":
             return self._json({
                 "decision_provider": normalize_decision_provider(None),

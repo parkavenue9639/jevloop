@@ -27,11 +27,16 @@ jevloop/
   providers, storage or applications. Durable records and both projections live
   together; their separate source/view boundaries remain mandatory.
 - `decision` may use contracts/context/config, not the execution kernel,
-  concrete tools, persistence or application entry points.
+  concrete tools or application entry points. The narrowly allowlisted
+  `decision/llm_transport.py` adapter may read `storage.assets` to materialize
+  native image requests; decision policy and pure projections cannot perform I/O.
 - `runtime` orchestrates decisions and context through contracts. Concrete
   providers are injected; it does not import Docker/Lark/application code.
 - `tools` implements contracts and may update context. Provider-specific
   transport lives alongside providers, not in a generic root adapter package.
+  `tools/sandbox.py` may capture immutable image assets via `storage.assets`;
+  `VIEW_IMAGE` invokes the kernel-injected `ToolContext.visual_read` capability
+  for contextual perception. It cannot import model clients or route decisions.
 - `storage` persists source records, not model prompts, and does not invoke
   decisions or applications.
 - `apps` assembles runtime, providers and storage. `evaluation` may reuse this

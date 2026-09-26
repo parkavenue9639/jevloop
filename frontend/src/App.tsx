@@ -97,7 +97,7 @@ function App() {
 
         <main className="flex min-w-0 flex-1 flex-col">
           <PlaybackControls chat={chat} />
-          <ExecutionWorkspace chat={chat} composer={<ChatInput disabled={locked} starting={chat.starting} error={chat.startError} onSend={(params) => void chat.send(params)} />} />
+          <ExecutionWorkspace chat={chat} composer={<ChatInput scope={chat.composerScope} disabled={locked} starting={chat.starting} error={chat.startError} onSend={(params) => void chat.send(params)} />} />
         </main>
       </div>
     </div>
